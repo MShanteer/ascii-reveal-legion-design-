@@ -64,7 +64,7 @@ function ensureStyles() {
   const el = document.createElement('style');
   el.setAttribute('data-ascii-reveal', '');
   el.textContent = `
-[${T}]{color:transparent!important;-webkit-text-fill-color:transparent!important;text-shadow:none!important}
+html:not([data-ar-measuring]) [${T}]{color:transparent!important;-webkit-text-fill-color:transparent!important;text-shadow:none!important}
 [${M}],[${S}],[${F}]{opacity:var(--ar-o,0)!important}
 [data-ar-pending]{visibility:hidden}
 .ar-overlay{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:visible}
@@ -214,6 +214,7 @@ interface Env {
   overlay: HTMLElement;
   font: string;
   accent: string | null;
+  flash: string | null;
   glyph: string | null;
   dpr: number;
   origin: { x: number; y: number };
@@ -385,9 +386,9 @@ function textTarget(node: Text, env: Env, seed: number): Target | null {
           const was = c.st;
           apply(c, st);
           c.st = st;
-          if (st === 'r' && (was === 's' || was === 'k') && dir > 0 && env.accent) {
+          if (st === 'r' && (was === 's' || was === 'k') && dir > 0 && env.flash) {
             c.el!.style.transition = 'none';
-            c.el!.style.color = env.accent;
+            c.el!.style.color = env.flash;
             flashNext.push([c.el!, real.color]);
           }
         }
@@ -669,6 +670,7 @@ class Controller implements AsciiRevealController {
   shimmerLoop: (Loop & { stopAt: number; canvas: HTMLCanvasElement }) | null = null;
   seed = (Math.random() * 1e6) | 0;
   n = 0;
+  destroyed = false;
 
   constructor(root: HTMLElement, opts: AsciiRevealOptions) {
     ensureStyles();
@@ -716,6 +718,7 @@ class Controller implements AsciiRevealController {
     const font = cssVar(this.root, '--ascii-font') || DEFAULT_FONT;
     const accent = cssVar(this.root, '--ascii-accent') || null;
     const glyph = cssVar(this.root, '--ascii-glyph') || null;
+    const flash = cssVar(this.root, '--ascii-flash') || null;
     return {
       preset: resolvePreset(o.preset ?? this.opts.preset),
       scale: 1 / Math.max(0.1, o.speed ?? this.opts.speed ?? 1),
@@ -726,6 +729,7 @@ class Controller implements AsciiRevealController {
       overlay: this.overlay,
       font,
       accent,
+      flash,
       glyph,
       dpr: getDpr(),
       origin: this.origin(o.origin ?? this.opts.origin, scope),
@@ -778,7 +782,15 @@ class Controller implements AsciiRevealController {
     if (!isBrowser()) return;
     const scope = o.within || this.root;
     const env = this.env(o, scope);
-    const targets = this.collect(scope, env);
+    // read real colors even if the content is currently hidden by a previous run
+    const html = document.documentElement;
+    html.setAttribute('data-ar-measuring', '');
+    let targets: Target[];
+    try {
+      targets = this.collect(scope, env);
+    } finally {
+      html.removeAttribute('data-ar-measuring');
+    }
     if (dir < 0) this.lastRects = targets.filter((t) => t.rect).map((t) => t.rect!);
 
     if (dir < 0 && (o.instant || reducedMotion())) {
@@ -831,7 +843,7 @@ class Controller implements AsciiRevealController {
     }
     if (dir > 0) await Promise.all(targets.map((t) => t.ready?.()));
     for (const t of targets) t.prepare?.();
-    if (!targets.some((t) => owner.get(t.key) === run)) {
+    if (this.destroyed || !targets.some((t) => owner.get(t.key) === run)) {
       run.resolve();
       return run.done;
     }
@@ -919,6 +931,7 @@ class Controller implements AsciiRevealController {
   }
 
   destroy() {
+    this.destroyed = true;
     for (const run of Array.from(runs)) {
       if (run.ctrl !== this) continue;
       runs.delete(run);

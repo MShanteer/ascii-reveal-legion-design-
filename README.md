@@ -1,5 +1,7 @@
 # ascii-reveal
 
+**[Live demo](https://quanhoangindex.github.io/ascii-reveal/)**
+
 A loading effect for React. Text, images and whole cards decode into place through a character grid, in one wave across the page.
 
 - **No layout shift.** Your content stays in the DOM in its real position. The scramble is drawn on a layer above it.
@@ -19,7 +21,7 @@ npm i ascii-reveal
 Straight from GitHub (no npm publish needed):
 
 ```bash
-npm i github:<your-github-username>/ascii-reveal
+npm i github:quanhoangindex/ascii-reveal
 ```
 
 React 17 or newer is a peer dependency. The built files in `dist/` are committed, so the GitHub install works without a build step.
@@ -100,7 +102,8 @@ The effect reads these CSS custom properties from the wrapper:
 
 ```css
 .my-app {
-  --ascii-accent: #5b8cff;   /* flash as each character lands, cursor and blueprint glyphs */
+  --ascii-accent: #5b8cff;   /* cursor and blueprint glyphs */
+  --ascii-flash: #5b8cff;    /* optional: brief color as each character lands */
   --ascii-glyph: #888;       /* scramble glyph color (defaults to the text's own color at 50%) */
   --ascii-font: "Geist Mono", ui-monospace, monospace;
   --ascii-surface: #0b0b0d;  /* color behind transparent images, if detection is wrong */
