@@ -88,6 +88,8 @@ export const AsciiReveal = forwardRef<AsciiRevealHandle, AsciiRevealProps>(funct
     if (!root || !overlay) return;
     const c = createAsciiReveal(root, { overlay, preset, speed, origin, selector });
     ctrl.current = c;
+    // measure with the content visible; nothing paints before the reveal hides it again
+    root.removeAttribute('data-ar-pending');
     if (loadingRef.current) {
       c.hide({ instant: true });
       if (shimmer) c.shimmer(true);
