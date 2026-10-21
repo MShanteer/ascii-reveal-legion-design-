@@ -1,0 +1,6 @@
+node_modules/
+demo/node_modules/
+demo/dist/
+.DS_Store
+*.log
+# dist/ is committed on purpose so `npm i github:user/ascii-reveal` works without a build
