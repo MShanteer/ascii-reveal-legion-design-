@@ -157,13 +157,6 @@ input[type="range"] { accent-color: var(--fg); width: 110px; }
 .rows dt { font: 11.5px/1.6 var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: 0.06em; padding-right: 16px; }
 .rows dd { text-align: right; font-size: 13.5px; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.feat { padding: 48px 40px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
-.feat:last-child { border-right: 0; }
-.feat .k { font: 12px var(--mono); color: var(--faint); }
-.feat h2 { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
-.feat p { font-size: 14px; color: var(--muted); max-width: 44ch; }
-@media (max-width: 760px) { .features { grid-template-columns: minmax(0, 1fr); } .feat { border-right: 0; border-bottom: 1px solid var(--line); padding: 24px; } .feat:last-child { border-bottom: 0; } }
 /* skeleton comparison */
 .compare { padding: 96px 56px; display: flex; flex-direction: column; }
 @media (max-width: 760px) { .compare { padding: 64px 16px; } }
@@ -173,7 +166,10 @@ input[type="range"] { accent-color: var(--fg); width: 110px; }
 
 /* Loading states section: header → mode tabs → one control bar → bento of three demo cards → code for the active mode */
 .cmp-head { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; max-width: 640px; align-self: center; }
-.cmp-head h2 { font-size: 32px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.1; margin: 0; }
+.cmp-head h2 { font-size: clamp(36px, 4vw, 52px); font-weight: 600; letter-spacing: -0.035em; line-height: 1.1; margin: 0; }
+.aura { background: linear-gradient(100deg, #f1e9df 0%, #d9b3c3 40%, #9c6c84 70%, #8f97ad 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+:root[data-theme="light"] .aura { background-image: linear-gradient(100deg, #b5657f 0%, #8a4f6c 45%, #4d5670 100%); }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .aura { background-image: linear-gradient(100deg, #b5657f 0%, #8a4f6c 45%, #4d5670 100%); } }
 .cmp-tabs { display: inline-flex; align-self: center; gap: 4px; padding: 4px; margin-top: 32px; border-radius: 999px;
   background: var(--glass); border: 1px solid var(--glass-line); box-shadow: inset 0 1px 0 var(--glass-hi); }
 .cmp-tab { font: 500 14px/1 var(--sans); color: var(--muted); background: transparent; border: 0; border-radius: 999px; padding: 11px 20px; cursor: pointer; transition: color .15s ease, background .2s ease; }
@@ -276,10 +272,15 @@ input[type="range"] { accent-color: var(--fg); width: 110px; }
 @media (prefers-reduced-motion: reduce) { .gray { animation: none; } }
 
 /* loading mascots */
-.spooky { padding: 96px 56px; display: flex; flex-direction: column; gap: 40px; }
+.spooky { padding: 96px 56px; display: flex; flex-direction: column; gap: 40px; isolation: isolate; --spooky-glyph: rgba(214, 180, 196, 0.8);
+  background: radial-gradient(120% 90% at 70% 0%, color-mix(in srgb, #9c6c84 10%, var(--bg)) 0%, var(--bg) 60%); }
+:root[data-theme="light"] .spooky { --spooky-glyph: rgba(110, 60, 90, 0.55); }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .spooky { --spooky-glyph: rgba(110, 60, 90, 0.55); } }
+.spooky-bg { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.spooky-bg canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .spooky-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 32px; flex-wrap: wrap; }
-.spooky-intro { display: flex; flex-direction: column; gap: 14px; max-width: 520px; }
-.spooky-intro h2 { font-size: 32px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.1; margin: 0; }
+.spooky-intro { display: flex; flex-direction: column; gap: 14px; max-width: 600px; }
+.spooky-intro h2 { font-size: clamp(36px, 4vw, 52px); font-weight: 600; letter-spacing: -0.035em; line-height: 1.1; margin: 0; }
 .spooky-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .spooky-actions .snippet { margin: 0; }
 .spooky-actions, .spooky-actions > * { min-width: 0; max-width: 100%; }
