@@ -18,6 +18,9 @@ export function AsciiBackdrop({ theme }: { theme: string }) {
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
     let W = 0, H = 0, dpr = 1, raf = 0, last = 0, color = '#888';
     const t0 = performance.now();
+    let busy = false;
+    const onReveal = (e: Event) => { busy = !!(e as CustomEvent<{ active: boolean }>).detail?.active; };
+    document.addEventListener('asciireveal', onReveal);
 
     const readColor = () => {
       color = getComputedStyle(document.documentElement).getPropertyValue('--backdrop-glyph').trim() || '#888';
@@ -64,7 +67,8 @@ export function AsciiBackdrop({ theme }: { theme: string }) {
 
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
-      if (document.hidden || now - last < 42) return;
+      // ~15 fps is plenty for a slow wave; pause entirely while a reveal is running
+      if (document.hidden || busy || now - last < 66) return;
       last = now;
       draw(now);
     };
@@ -81,6 +85,7 @@ export function AsciiBackdrop({ theme }: { theme: string }) {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', resize);
       mo.disconnect();
+      document.removeEventListener('asciireveal', onReveal);
       mq.removeEventListener('change', onScheme);
     };
   }, [theme]);

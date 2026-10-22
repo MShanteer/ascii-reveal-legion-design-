@@ -1,4 +1,4 @@
-import * as react from 'react';
+import * as React from 'react';
 import { HTMLAttributes, ReactNode, ElementType } from 'react';
 
 type PresetName = 'decode' | 'dither' | 'terminal' | 'blueprint';
@@ -23,15 +23,30 @@ interface Preset {
 declare const presets: Record<PresetName, Preset>;
 declare function resolvePreset(p: PresetName | Preset | undefined): Preset;
 
+/**
+ * Loading mascots. Each one is a small animated vector drawing; the engine renders it
+ * through the glyph grid, so it shows up as living ASCII art while content loads.
+ * Every draw function fills a w×h box at time t (seconds).
+ */
+type MascotName = 'spider' | 'ghost' | 'pumpkin' | 'bat';
+type MascotDraw = (ctx: CanvasRenderingContext2D, w: number, h: number, t: number, color: string) => void;
+declare const mascots: Record<MascotName, MascotDraw>;
+/** A custom mascot from an SVG URL or SVG markup, gently floating. */
+declare function imageMascot(src: string): MascotDraw;
+
 type Origin = 'center' | 'top-left' | 'pointer' | {
     x: number;
     y: number;
 };
+/** `fast` (default) keeps data readable within ~400 ms; `cinematic` is the slow showcase wave. */
+type Duration = 'fast' | 'cinematic';
 interface AsciiRevealOptions {
     /** Built-in preset name or a custom preset object. Default `decode`. */
     preset?: PresetName | Preset;
     /** Playback speed multiplier. 2 is twice as fast. Default 1. */
     speed?: number;
+    /** `fast` (default) for data, `cinematic` for heroes and demos. */
+    duration?: Duration;
     /** Where the reveal wave starts. Default `center` of the element. */
     origin?: Origin;
     /** Only animate content inside elements matching this selector. */
@@ -44,12 +59,25 @@ interface AsciiRevealOptions {
     media?: string;
     /** Element the effect draws into. Created automatically when omitted. */
     overlay?: HTMLElement;
+    /**
+     * Show an animated ASCII mascot while loading instead of the plain shimmer:
+     * `spider`, `ghost`, `pumpkin`, `bat`, an SVG URL, SVG markup, or your own draw function.
+     */
+    mascot?: MascotName | string | MascotDraw | null;
+    /**
+     * Reveal sections below the fold as they scroll into view instead of all at once.
+     * Applies to full reveals (no `within`). Default true.
+     */
+    lazy?: boolean;
+    /** If the device can't keep up (frames over ~45 ms), finish instantly instead of stuttering. Default true. */
+    fallback?: boolean;
 }
 interface RunOptions {
     origin?: Origin;
     /** Limit this run to a part of the tree, for example one card. */
     within?: Element;
     speed?: number;
+    duration?: Duration;
     preset?: PresetName | Preset;
     /** Hide only: skip the animation and hide immediately. */
     instant?: boolean;
@@ -59,7 +87,7 @@ interface AsciiRevealController {
     reveal(options?: RunOptions): Promise<void>;
     /** Scramble the content back out. It stays hidden until the next `reveal()`. */
     hide(options?: RunOptions): Promise<void>;
-    /** Show a glyph shimmer where hidden content was, for loading states. */
+    /** Show a glyph shimmer (or the mascot) where hidden content was, for loading states. */
     shimmer(on: boolean): void;
     update(options: Partial<AsciiRevealOptions>): void;
     destroy(): void;
@@ -83,12 +111,19 @@ interface AsciiRevealProps extends Omit<HTMLAttributes<HTMLElement>, 'children'>
     preset?: PresetName | Preset;
     /** Playback speed multiplier. Default 1. */
     speed?: number;
+    /** `fast` (default): data is readable within ~400 ms. `cinematic`: the slow showcase wave. */
+    duration?: Duration;
     /** Where the wave starts: `center` (default), `top-left`, `pointer`, or `{ x, y }` in viewport px. */
     origin?: Origin;
     /** Only animate content inside elements that match this selector. */
     selector?: string;
-    /** Reveal when the component mounts. Default true. */
+    /**
+     * Reveal when the component mounts on the client. Default true.
+     * Server-rendered content is never hidden on hydration unless `revealOnHydrate` is set.
+     */
     revealOnMount?: boolean;
+    /** Also decode server-rendered content when it hydrates. Default false (it stays visible). */
+    revealOnHydrate?: boolean;
     /**
      * Loading state. `true` scrambles the content out and shows a glyph shimmer;
      * switching back to `false` decodes the new content into place.
@@ -96,6 +131,15 @@ interface AsciiRevealProps extends Omit<HTMLAttributes<HTMLElement>, 'children'>
     loading?: boolean;
     /** Show the shimmer while `loading` is true. Default true. */
     shimmer?: boolean;
+    /**
+     * Replace the shimmer with an animated ASCII mascot while loading:
+     * `spider`, `ghost`, `pumpkin`, `bat`, an SVG URL or markup, or a draw function.
+     */
+    mascot?: MascotName | string | MascotDraw | null;
+    /** Reveal sections below the fold as they scroll into view. Default true. */
+    lazy?: boolean;
+    /** Finish instantly instead of stuttering on slow devices. Default true. */
+    fallback?: boolean;
     /** Called after the mount reveal or a loading reveal finishes. */
     onRevealComplete?: () => void;
 }
@@ -105,7 +149,7 @@ interface AsciiRevealProps extends Omit<HTMLAttributes<HTMLElement>, 'children'>
  * Mark cards with `data-ascii="surface"`, buttons or chips with `data-ascii="fade"`,
  * and anything to leave alone with `data-ascii="skip"`.
  */
-declare const AsciiReveal: react.ForwardRefExoticComponent<AsciiRevealProps & react.RefAttributes<AsciiRevealHandle>>;
+declare const AsciiReveal: React.ForwardRefExoticComponent<AsciiRevealProps & React.RefAttributes<AsciiRevealHandle>>;
 /**
  * Attach the effect to an element you render yourself.
  * Returns a ref callback plus `reveal` / `hide`.
@@ -113,6 +157,7 @@ declare const AsciiReveal: react.ForwardRefExoticComponent<AsciiRevealProps & re
 declare function useAsciiReveal(options?: {
     preset?: PresetName | Preset;
     speed?: number;
+    duration?: Duration;
     origin?: Origin;
     selector?: string;
     revealOnMount?: boolean;
@@ -122,4 +167,52 @@ declare function useAsciiReveal(options?: {
     hide: (o?: RunOptions) => Promise<void>;
 };
 
-export { AsciiReveal, type AsciiRevealController, type AsciiRevealHandle, type AsciiRevealOptions, type AsciiRevealProps, type Origin, type Preset, type PresetName, type RunOptions, createAsciiReveal, presets, resolvePreset, useAsciiReveal };
+type SkeletonVariant = 'dither' | 'scan' | 'braille' | 'terminal';
+interface SkeletonSpec {
+    /** Glyph style. Default `dither`. */
+    variant?: SkeletonVariant;
+    /** Number of text lines. Default 3. */
+    lines?: number;
+    /** Line widths (CSS). Defaults to a natural paragraph shape. */
+    widths?: (string | number)[];
+    /** Rows of glyphs for a block (image/avatar) skeleton. Overrides `lines`. */
+    rows?: number;
+    /** Seed for the glyph pattern. */
+    seed?: number;
+}
+/** HTML string for non-React use: `el.innerHTML = asciiSkeletonHTML({ lines: 3 })`. */
+declare function asciiSkeletonHTML(spec?: SkeletonSpec): string;
+
+interface AsciiSkeletonProps extends Omit<HTMLAttributes<HTMLElement>, 'children'> {
+    /** Glyph style: `dither` (shaded blocks, default), `scan` (decode glyphs), `braille` (fine dots), `terminal` (0/1 in your accent color). */
+    variant?: SkeletonVariant;
+    /** Number of text lines. Default 3. */
+    lines?: number;
+    /** Line widths (CSS lengths or px numbers). Defaults to a natural paragraph shape. */
+    widths?: (string | number)[];
+    /** Render a block (image, avatar, chart) of this many glyph rows instead of text lines. */
+    rows?: number;
+    /** Block width / height (CSS). Useful with `rows`. */
+    width?: string | number;
+    height?: string | number;
+    /** Round block, e.g. an avatar. */
+    circle?: boolean;
+    /** Seed for the glyph pattern, so neighbouring skeletons don't look identical. */
+    seed?: number;
+    /** Element to render as. Default `span`. */
+    as?: ElementType;
+}
+/**
+ * Instant ASCII placeholder. Pure markup + CSS: it paints on first render, works with server rendering,
+ * needs no JavaScript and reserves the space your content will take. Use it on its own, or put it inside
+ * `<AsciiReveal loading>` and the real content decodes in when it arrives.
+ *
+ * ```tsx
+ * <AsciiReveal loading={!data}>
+ *   {data ? <Profile data={data} /> : <AsciiSkeleton lines={3} variant="dither" />}
+ * </AsciiReveal>
+ * ```
+ */
+declare function AsciiSkeleton({ variant, lines, widths, rows, width, height, circle, seed, as, style, className, ...rest }: AsciiSkeletonProps): React.ReactElement<any, string | React.JSXElementConstructor<any>>;
+
+export { AsciiReveal, type AsciiRevealController, type AsciiRevealHandle, type AsciiRevealOptions, type AsciiRevealProps, AsciiSkeleton, type AsciiSkeletonProps, type Duration, type MascotDraw, type MascotName, type Origin, type Preset, type PresetName, type RunOptions, type SkeletonSpec, type SkeletonVariant, asciiSkeletonHTML, createAsciiReveal, imageMascot, mascots, presets, resolvePreset, useAsciiReveal };
