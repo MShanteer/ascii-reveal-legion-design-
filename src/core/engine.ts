@@ -90,6 +90,7 @@ const TIMING: Record<Duration, Timing> = {
 
 const T = 'data-ar-t'; // text parent hidden
 const M = 'data-ar-m'; // media hidden / fading
+const TC = 'data-ar-tc'; // gradient text being hidden
 const S = 'data-ar-s'; // surface fading
 const F = 'data-ar-f'; // fade element
 const DEFAULT_FONT = 'ui-monospace, "SF Mono", "Geist Mono", "JetBrains Mono", Menlo, Consolas, monospace';
@@ -103,6 +104,7 @@ function ensureStyles() {
   // text is hidden with text-fill-color, not color, so icons drawn with currentColor stay visible
   el.textContent = `
 [${T}]{-webkit-text-fill-color:transparent!important;text-shadow:none!important;text-decoration-color:transparent!important}
+[${TC}]{background-image:none!important}
 [${M}],[${S}],[${F}]{opacity:var(--ar-o,0)!important}
 [data-ar-pending]{visibility:hidden}
 .ar-overlay{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:visible}
@@ -185,7 +187,14 @@ function hold(el: Element, name: string) {
   if (!m) holds.set(el, (m = new Map()));
   const n = (m.get(name) || 0) + 1;
   m.set(name, n);
-  if (n === 1) el.setAttribute(name, '');
+  if (n === 1) {
+    el.setAttribute(name, '');
+    // gradient text (background-clip: text) paints through a transparent fill, so hide its background too
+    if (name === T) {
+      const cs = getComputedStyle(el);
+      if ((cs.backgroundClip || (cs as unknown as Record<string, string>).webkitBackgroundClip || '').includes('text')) el.setAttribute(TC, '');
+    }
+  }
 }
 function release(el: Element, name: string) {
   const m = holds.get(el);
@@ -194,6 +203,7 @@ function release(el: Element, name: string) {
   if (n > 0) return void m.set(name, n);
   m.delete(name);
   el.removeAttribute(name);
+  if (name === T) el.removeAttribute(TC);
   if (name !== T && !el.hasAttribute(M) && !el.hasAttribute(S) && !el.hasAttribute(F)) {
     (el as HTMLElement).style.removeProperty('--ar-o');
   }

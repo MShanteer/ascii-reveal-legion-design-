@@ -102,7 +102,7 @@ interface VariantSpec {
     bias: number;
 }
 declare const SKELETON_VARIANTS: Record<SkeletonVariant, VariantSpec>;
-declare const SKELETON_CSS = "\n.ars{display:block;font-family:var(--ascii-font,ui-monospace,\"SF Mono\",Menlo,Consolas,monospace);color:var(--ascii-skeleton,currentColor);user-select:none;pointer-events:none;--ars-base:.3;--ars-wave:.9;--ars-band:45%;--ars-speed:1.8s}\n.ars-line,.ars-block{position:relative;display:block;overflow:hidden;white-space:pre;line-height:1.3;contain:inline-size}\n.ars-line+.ars-line{margin-top:.55em}\n.ars-block{line-height:1;border-radius:var(--ars-radius,8px);background:color-mix(in srgb,currentColor 6%,transparent)}\n.ars-base{display:block;opacity:var(--ars-base)}\n.ars-wave{position:absolute;inset:0;display:block;opacity:var(--ars-wave);color:var(--ars-wave-color,currentColor);-webkit-mask-image:linear-gradient(90deg,transparent,#000 45%,#000 55%,transparent);mask-image:linear-gradient(90deg,transparent,#000 45%,#000 55%,transparent);-webkit-mask-size:var(--ars-band) 100%;mask-size:var(--ars-band) 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:-120% 0;mask-position:-120% 0;animation:ars-sweep var(--ars-speed) cubic-bezier(.45,.05,.55,.95) infinite,ars-a .24s steps(1,end) infinite;animation-delay:var(--ars-d,0s),0s}\n.ars-wave+.ars-wave{animation-name:ars-sweep,ars-b}\n@keyframes ars-sweep{to{-webkit-mask-position:220% 0;mask-position:220% 0}}\n@keyframes ars-a{50%{visibility:hidden}}\n@keyframes ars-b{0%{visibility:hidden}50%{visibility:visible}}\n.ars-dither{--ars-base:.22;--ars-wave:.75;--ars-band:55%}\n.ars-dither .ars-line{line-height:1;letter-spacing:-.02em}\n.ars-braille{--ars-base:.35;--ars-wave:1;--ars-band:40%}\n.ars-scan{--ars-base:.28;--ars-wave:.95;--ars-band:38%}\n.ars-terminal{--ars-base:.16;--ars-wave:1;--ars-band:35%;--ars-speed:1.5s;--ars-wave-color:var(--ascii-accent,currentColor)}\n@media (prefers-reduced-motion:reduce){.ars-wave{display:none}}";
+declare const SKELETON_CSS = "\n:where(.ars){position:relative;display:block;font-family:var(--ascii-font,ui-monospace,\"SF Mono\",Menlo,Consolas,monospace);color:var(--ascii-skeleton,currentColor);user-select:none;pointer-events:none;--ars-base:.3;--ars-wave:.9;--ars-band:45%;--ars-speed:1.8s}\n.ars-line,.ars-block{position:relative;display:block;overflow:hidden;white-space:pre;line-height:1.3;contain:inline-size layout paint style}\n.ars-line+.ars-line{margin-top:.55em}\n.ars-block{line-height:1;border-radius:var(--ars-radius,8px);background:color-mix(in srgb,currentColor 6%,transparent)}\n.ars-base{display:block;opacity:var(--ars-base)}\n.ars>canvas{position:absolute;left:0;top:0;pointer-events:none}\n.ars-dither{--ars-base:.22;--ars-wave:.75;--ars-band:55%}\n.ars-dither .ars-line{line-height:1;letter-spacing:-.02em}\n.ars-braille{--ars-base:.35;--ars-wave:1;--ars-band:40%}\n.ars-scan{--ars-base:.28;--ars-wave:.95;--ars-band:38%}\n.ars-terminal{--ars-base:.16;--ars-wave:1;--ars-band:35%;--ars-speed:1.5s;--ars-wave-color:var(--ascii-accent,currentColor)}";
 /** A deterministic row of glyphs. */
 declare function glyphRow(seed: number, len: number, ramp?: string, gap?: number, bias?: number): string;
 interface SkeletonSpec {
@@ -116,8 +116,17 @@ interface SkeletonSpec {
     rows?: number;
     /** Seed for the glyph pattern. */
     seed?: number;
+    /** Include the stylesheet. Default true; set false when you've added `SKELETON_CSS` to the page once. */
+    css?: boolean;
+    /** Shimmer. Default true. Set false for long lists: a still glyph pattern paints as fast as a gray box. */
+    animate?: boolean;
 }
-/** HTML string for non-React use: `el.innerHTML = asciiSkeletonHTML({ lines: 3 })`. */
+/** HTML string for non-React use: `el.innerHTML = asciiSkeletonHTML({ lines: 3 })`, then `animateSkeletons()` to start the shimmer. */
 declare function asciiSkeletonHTML(spec?: SkeletonSpec): string;
 
-export { type AsciiRevealController, type AsciiRevealOptions, type Duration, type MascotDraw, type MascotName, type Origin, type Preset, type PresetName, type RunOptions, SKELETON_CSS, SKELETON_VARIANTS, type SkeletonSpec, type SkeletonVariant, asciiSkeletonHTML, createAsciiReveal, glyphRow, imageMascot, mascots, presets, resolvePreset };
+/** Start the shimmer on one skeleton root (an element with class `ars`). Returns a function that stops it. */
+declare function animateSkeleton(root: HTMLElement): () => void;
+/** Start the shimmer on every animated skeleton inside `scope` (for markup from `asciiSkeletonHTML`). */
+declare function animateSkeletons(scope?: ParentNode): () => void;
+
+export { type AsciiRevealController, type AsciiRevealOptions, type Duration, type MascotDraw, type MascotName, type Origin, type Preset, type PresetName, type RunOptions, SKELETON_CSS, SKELETON_VARIANTS, type SkeletonSpec, type SkeletonVariant, animateSkeleton, animateSkeletons, asciiSkeletonHTML, createAsciiReveal, glyphRow, imageMascot, mascots, presets, resolvePreset };

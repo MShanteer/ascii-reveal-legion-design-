@@ -179,8 +179,12 @@ interface SkeletonSpec {
     rows?: number;
     /** Seed for the glyph pattern. */
     seed?: number;
+    /** Include the stylesheet. Default true; set false when you've added `SKELETON_CSS` to the page once. */
+    css?: boolean;
+    /** Shimmer. Default true. Set false for long lists: a still glyph pattern paints as fast as a gray box. */
+    animate?: boolean;
 }
-/** HTML string for non-React use: `el.innerHTML = asciiSkeletonHTML({ lines: 3 })`. */
+/** HTML string for non-React use: `el.innerHTML = asciiSkeletonHTML({ lines: 3 })`, then `animateSkeletons()` to start the shimmer. */
 declare function asciiSkeletonHTML(spec?: SkeletonSpec): string;
 
 interface AsciiSkeletonProps extends Omit<HTMLAttributes<HTMLElement>, 'children'> {
@@ -199,12 +203,15 @@ interface AsciiSkeletonProps extends Omit<HTMLAttributes<HTMLElement>, 'children
     circle?: boolean;
     /** Seed for the glyph pattern, so neighbouring skeletons don't look identical. */
     seed?: number;
+    /** Shimmer. Default true. Set false for long lists: a still glyph pattern paints as fast as a gray box. */
+    animate?: boolean;
     /** Element to render as. Default `span`. */
     as?: ElementType;
 }
 /**
  * Instant ASCII placeholder. Pure markup + CSS: it paints on first render, works with server rendering,
- * needs no JavaScript and reserves the space your content will take. Use it on its own, or put it inside
+ * needs no JavaScript and reserves the space your content will take. The shimmer is drawn on a small canvas
+ * once the component mounts (much cheaper than animating the markup). Use it on its own, or put it inside
  * `<AsciiReveal loading>` and the real content decodes in when it arrives.
  *
  * ```tsx
@@ -213,6 +220,11 @@ interface AsciiSkeletonProps extends Omit<HTMLAttributes<HTMLElement>, 'children
  * </AsciiReveal>
  * ```
  */
-declare function AsciiSkeleton({ variant, lines, widths, rows, width, height, circle, seed, as, style, className, ...rest }: AsciiSkeletonProps): React.ReactElement<any, string | React.JSXElementConstructor<any>>;
+declare function AsciiSkeleton({ variant, lines, widths, rows, width, height, circle, seed, animate, as, style, className, ...rest }: AsciiSkeletonProps): React.ReactElement<any, string | React.JSXElementConstructor<any>>;
 
-export { AsciiReveal, type AsciiRevealController, type AsciiRevealHandle, type AsciiRevealOptions, type AsciiRevealProps, AsciiSkeleton, type AsciiSkeletonProps, type Duration, type MascotDraw, type MascotName, type Origin, type Preset, type PresetName, type RunOptions, type SkeletonSpec, type SkeletonVariant, asciiSkeletonHTML, createAsciiReveal, imageMascot, mascots, presets, resolvePreset, useAsciiReveal };
+/** Start the shimmer on one skeleton root (an element with class `ars`). Returns a function that stops it. */
+declare function animateSkeleton(root: HTMLElement): () => void;
+/** Start the shimmer on every animated skeleton inside `scope` (for markup from `asciiSkeletonHTML`). */
+declare function animateSkeletons(scope?: ParentNode): () => void;
+
+export { AsciiReveal, type AsciiRevealController, type AsciiRevealHandle, type AsciiRevealOptions, type AsciiRevealProps, AsciiSkeleton, type AsciiSkeletonProps, type Duration, type MascotDraw, type MascotName, type Origin, type Preset, type PresetName, type RunOptions, type SkeletonSpec, type SkeletonVariant, animateSkeleton, animateSkeletons, asciiSkeletonHTML, createAsciiReveal, imageMascot, mascots, presets, resolvePreset, useAsciiReveal };

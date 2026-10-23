@@ -29,26 +29,31 @@ export const SKELETON_VARIANTS: Record<SkeletonVariant, VariantSpec> = {
 /** @deprecated kept for v0.3 compatibility; use SKELETON_VARIANTS. */
 export const SKELETON_RAMP = SKELETON_VARIANTS.scan.base;
 
-const MASK = 'linear-gradient(90deg,transparent,#000 45%,#000 55%,transparent)';
-const EASE = 'cubic-bezier(.45,.05,.55,.95)';
-
+/*
+ * How it stays cheap (measured, see scripts/skeleton-bench):
+ * - The markup is a still glyph pattern: plain HTML + CSS, paints on the first frame with no JavaScript.
+ * - The shimmer (a soft band sweeping each row, glyphs flickering inside it) is drawn by JavaScript on one small
+ *   canvas per skeleton at ~30 fps. Each row's glyphs are rasterised once; a frame only copies the band.
+ *   A CSS mask animation looks the same but makes the browser repaint every row on the main thread every frame
+ *   (~3x the CPU on a 12-card page).
+ * - Off-screen skeletons, hidden tabs and reduced motion don't animate at all.
+ * - The CSS ships once per page (React 19 hoists <style href precedence>; or pass css: false and add SKELETON_CSS once).
+ */
 export const SKELETON_CSS = `
-.ars{display:block;font-family:var(--ascii-font,ui-monospace,"SF Mono",Menlo,Consolas,monospace);color:var(--ascii-skeleton,currentColor);user-select:none;pointer-events:none;--ars-base:.3;--ars-wave:.9;--ars-band:45%;--ars-speed:1.8s}
-.ars-line,.ars-block{position:relative;display:block;overflow:hidden;white-space:pre;line-height:1.3;contain:inline-size}
+:where(.ars){position:relative;display:block;font-family:var(--ascii-font,ui-monospace,"SF Mono",Menlo,Consolas,monospace);color:var(--ascii-skeleton,currentColor);user-select:none;pointer-events:none;--ars-base:.3;--ars-wave:.9;--ars-band:45%;--ars-speed:1.8s}
+.ars-line,.ars-block{position:relative;display:block;overflow:hidden;white-space:pre;line-height:1.3;contain:inline-size layout paint style}
 .ars-line+.ars-line{margin-top:.55em}
 .ars-block{line-height:1;border-radius:var(--ars-radius,8px);background:color-mix(in srgb,currentColor 6%,transparent)}
 .ars-base{display:block;opacity:var(--ars-base)}
-.ars-wave{position:absolute;inset:0;display:block;opacity:var(--ars-wave);color:var(--ars-wave-color,currentColor);-webkit-mask-image:${MASK};mask-image:${MASK};-webkit-mask-size:var(--ars-band) 100%;mask-size:var(--ars-band) 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:-120% 0;mask-position:-120% 0;animation:ars-sweep var(--ars-speed) ${EASE} infinite,ars-a .24s steps(1,end) infinite;animation-delay:var(--ars-d,0s),0s}
-.ars-wave+.ars-wave{animation-name:ars-sweep,ars-b}
-@keyframes ars-sweep{to{-webkit-mask-position:220% 0;mask-position:220% 0}}
-@keyframes ars-a{50%{visibility:hidden}}
-@keyframes ars-b{0%{visibility:hidden}50%{visibility:visible}}
+.ars>canvas{position:absolute;left:0;top:0;pointer-events:none}
 .ars-dither{--ars-base:.22;--ars-wave:.75;--ars-band:55%}
 .ars-dither .ars-line{line-height:1;letter-spacing:-.02em}
 .ars-braille{--ars-base:.35;--ars-wave:1;--ars-band:40%}
 .ars-scan{--ars-base:.28;--ars-wave:.95;--ars-band:38%}
-.ars-terminal{--ars-base:.16;--ars-wave:1;--ars-band:35%;--ars-speed:1.5s;--ars-wave-color:var(--ascii-accent,currentColor)}
-@media (prefers-reduced-motion:reduce){.ars-wave{display:none}}`;
+.ars-terminal{--ars-base:.16;--ars-wave:1;--ars-band:35%;--ars-speed:1.5s;--ars-wave-color:var(--ascii-accent,currentColor)}`;
+
+/** Glyphs per row: enough for ~900 px of text line or ~800 px of block at the default sizes. */
+export const LINE_LEN = 120, BLOCK_LEN = 96;
 
 /** A deterministic row of glyphs. */
 export function glyphRow(seed: number, len: number, ramp = SKELETON_VARIANTS.scan.base, gap = 0.08, bias = 1.6): string {
@@ -57,6 +62,12 @@ export function glyphRow(seed: number, len: number, ramp = SKELETON_VARIANTS.sca
     out += hash(i, seed, 17) < gap ? ' ' : ramp[Math.floor(Math.pow(hash(i, seed, 29), bias) * ramp.length)];
   }
   return out;
+}
+
+/** The still glyph text for one skeleton row group (what the markup renders). */
+export function skeletonBase(variant: SkeletonVariant, seed: number, rows: number, len: number): string {
+  const v = SKELETON_VARIANTS[variant] || SKELETON_VARIANTS.dither;
+  return Array.from({ length: rows }, (_, r) => glyphRow(seed + r, len, v.base, v.gap, v.bias)).join('\n');
 }
 
 /** Base text and the two alternating wave texts for one skeleton row group. */
@@ -78,6 +89,10 @@ export interface SkeletonSpec {
   rows?: number;
   /** Seed for the glyph pattern. */
   seed?: number;
+  /** Include the stylesheet. Default true; set false when you've added `SKELETON_CSS` to the page once. */
+  css?: boolean;
+  /** Shimmer. Default true. Set false for long lists: a still glyph pattern paints as fast as a gray box. */
+  animate?: boolean;
 }
 
 export const SKELETON_WIDTHS = ['100%', '94%', '72%', '88%', '60%'];
@@ -85,16 +100,16 @@ const css = (v: string | number) => (typeof v === 'number' ? `${v}px` : v);
 /** Stagger so lines sweep as one diagonal band. */
 export const skeletonDelay = (i: number) => `${(i * 0.09).toFixed(2)}s`;
 
-/** HTML string for non-React use: `el.innerHTML = asciiSkeletonHTML({ lines: 3 })`. */
+/** HTML string for non-React use: `el.innerHTML = asciiSkeletonHTML({ lines: 3 })`, then `animateSkeletons()` to start the shimmer. */
 export function asciiSkeletonHTML(spec: SkeletonSpec = {}): string {
-  const { variant = 'dither', lines = 3, widths = SKELETON_WIDTHS, rows, seed = 1 } = spec;
+  const { variant = 'dither', lines = 3, widths = SKELETON_WIDTHS, rows, seed = 1, css: withCss = true, animate = true } = spec;
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const group = (i: number, cls: string, style: string, n: number) => {
-    const [b, w1, w2] = skeletonLayers(variant, seed * 97 + i * 13, n, rows ? 120 : 160);
-    return `<span class="${cls}" style="${style}--ars-d:${skeletonDelay(i)}"><span class="ars-base">${esc(b)}</span><span class="ars-wave">${esc(w1)}</span><span class="ars-wave">${esc(w2)}</span></span>`;
+    const b = skeletonBase(variant, seed * 97 + i * 13, n, rows ? BLOCK_LEN : LINE_LEN);
+    return `<span class="${cls}" style="${style}"><span class="ars-base">${esc(b)}</span></span>`;
   };
   const body = rows
     ? group(0, 'ars-block', '', rows)
     : Array.from({ length: lines }, (_, i) => group(i, 'ars-line', `width:${css(widths[i % widths.length])};`, 1)).join('');
-  return `<style>${SKELETON_CSS}</style><span class="ars ars-${variant}" data-ascii-skeleton aria-hidden="true">${body}</span>`;
+  return `${withCss ? `<style>${SKELETON_CSS}</style>` : ''}<span class="ars ars-${variant}" data-ascii-skeleton${animate ? ` data-ars-animate="${seed}"` : ''} aria-hidden="true">${body}</span>`;
 }
