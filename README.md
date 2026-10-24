@@ -1,6 +1,19 @@
 # ascii-reveal
 
-**[Live demo](https://quanhoangindex.github.io/ascii-reveal/)**
+<a href="https://quanhoangindex.github.io/ascii-reveal/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/quanhoangindex/ascii-reveal/main/.github/assets/ascii-reveal-demo-dark.webp">
+    <img src="https://raw.githubusercontent.com/quanhoangindex/ascii-reveal/main/.github/assets/ascii-reveal-demo-light.webp" alt="Three cards load as ASCII skeletons, then their real content decodes in through a character grid" width="100%">
+  </picture>
+</a>
+
+<sub>Recorded from the real component: <code>&lt;AsciiSkeleton&gt;</code> while loading, then <code>&lt;AsciiReveal&gt;</code> decodes the data in. <b><a href="https://quanhoangindex.github.io/ascii-reveal/">Try the live demo →</a></b></sub>
+
+```tsx
+<AsciiReveal loading={!data}>
+  {data ? <Profile data={data} /> : <AsciiSkeleton lines={3} />}
+</AsciiReveal>
+```
 
 A loading effect for React. Text, images and whole cards decode into place through a character grid, in one wave across the page.
 
@@ -86,7 +99,7 @@ The reveal never animates the skeleton itself. It leaves it alone while loading,
 - It's static markup plus a CSS flicker, so it shows up in server-rendered HTML before any JavaScript runs, and reserves the space your content will take.
 - Patterns are deterministic, so server and client output match (no hydration warnings).
 - `lines` and `widths` shape a paragraph; `rows`, `width`, `height` and `circle` make a block for an image or avatar.
-- A band of denser glyphs sweeps across a faint base pattern, like a classic shimmer, all in CSS. With reduced motion, the sweep stops.
+- A band of denser glyphs sweeps across a faint base pattern, like a classic shimmer. The pattern is plain HTML/CSS; the sweep is drawn on a small canvas once the component mounts. With reduced motion, the sweep stops.
 
 Pick a style with `variant`:
 
@@ -100,9 +113,32 @@ Pick a style with `variant`:
 ```tsx
 <AsciiSkeleton variant="braille" lines={3} />
 <AsciiSkeleton variant="dither" rows={6} width={64} height={64} circle />
+<AsciiSkeleton animate={false} lines={2} />   {/* still pattern: cheapest, for long lists */}
 ```
 
-Without React: `el.innerHTML = asciiSkeletonHTML({ lines: 3 })` from `ascii-reveal/core`.
+Without React: `el.innerHTML = asciiSkeletonHTML({ lines: 3 })`, then `animateSkeletons(el)`, both from `ascii-reveal/core`.
+
+#### How much does it cost?
+
+A skeleton only does its job if it shows up as fast as a gray box and never delays the data, so we measured it against one. Pre-rendered pages, no JavaScript needed to paint, Chromium on a machine without a GPU (so all drawing is done in software, the worst case), median of 7–11 runs:
+
+| 12 cards, normal CPU | Gray skeleton | AsciiSkeleton | AsciiSkeleton `animate={false}` |
+| --- | --- | --- | --- |
+| First paint | 48 ms | 44 ms | 36 ms |
+| Style + layout at load | 2 ms | 9 ms | 5 ms |
+| Browser CPU while waiting | 15% | 21% | 0% |
+| HTML (gzipped) | 0.5 KB | 3.2 KB | 3 KB |
+
+How it stays cheap:
+
+- The markup is a still glyph pattern (plain HTML + CSS), so it paints on the first frame before any JavaScript runs.
+- The shimmer is drawn on one small canvas per skeleton at ~30 fps once the component mounts. Each row's glyphs are rendered once; a frame only copies the moving band. (Our first version animated a CSS mask instead: it looked the same but used 62% CPU, because the browser repainted every row every frame.)
+- Off-screen skeletons, background tabs and reduced motion don't animate at all. For long lists, `animate={false}` skips the shimmer entirely.
+- `AsciiSkeleton` never delays your data: content swaps in the moment it arrives. Only the optional `AsciiReveal` decode adds time (~350–400 ms after the data lands).
+- With React 19, the skeleton's CSS is sent once per page. With React 18 it's repeated inline per skeleton; add `SKELETON_CSS` to your page once and use `asciiSkeletonHTML({ css: false })` if that matters to you.
+- Without React: `el.innerHTML = asciiSkeletonHTML({ lines: 3 })`, then `animateSkeletons(el)` to start the shimmer.
+
+Run it yourself: `node scripts/skeleton-bench/build.cjs && node scripts/skeleton-bench/bench.cjs`.
 
 ### Server rendering
 
