@@ -121,6 +121,23 @@ function trackPointer() {
   document.addEventListener('pointerdown', (e) => (pointer = { x: e.clientX, y: e.clientY }), { passive: true });
 }
 
+/** `object-position` as two functions: free space (device px) → offset. Percentages and keywords scale the free space; lengths are fixed. */
+function objectPos(v: string): [(free: number, dp: number) => number, (free: number, dp: number) => number] {
+  const KW: Record<string, number> = { left: 0, top: 0, center: 50, right: 100, bottom: 100 };
+  const parts = (v || '50% 50%').trim().split(/\s+/);
+  const one = (t: string | undefined) => (free: number, dp: number) => {
+    if (!t) return free / 2;
+    if (t in KW) return (free * KW[t]) / 100;
+    if (t.endsWith('%')) return (free * parseFloat(t)) / 100;
+    if (t.endsWith('px')) return parseFloat(t) * dp;
+    return free / 2;
+  };
+  // keyword order can be swapped ("bottom right"); computed values are usually "x y" already
+  let [a, b] = parts;
+  if (a === 'top' || a === 'bottom' || b === 'left' || b === 'right') [a, b] = [b, a];
+  return [one(a), one(b)];
+}
+
 interface Target {
   key: object;
   holdEl: Element;
@@ -132,6 +149,8 @@ interface Target {
   text?: boolean;
   insideSurface?: boolean;
   init(dir: 1 | -1): void;
+  /** Still loading (an image being decoded): not drawn yet, the run waits for it. */
+  pending?: boolean;
   prepare?(): void;
   ready?(): Promise<void>;
   /** `paint` is true on frames where the shared canvas was cleared and must be redrawn (~30 fps). */
@@ -244,6 +263,7 @@ function tick() {
     let finished = true;
     for (const t of run.targets) {
       if (owner.get(t.key) !== run || run.baked.has(t)) continue;
+      if (t.pending) { finished = false; continue; }
       const tl = local - t.offset;
       if (tl < 0) {
         finished = false;
@@ -680,7 +700,9 @@ function mediaTarget(el: HTMLElement, env: Env, layer: () => Layer): Target | nu
           const iw = el.naturalWidth, ih = el.naturalHeight;
           if (cs.objectFit === 'cover' || cs.objectFit === 'contain') {
             const sc = cs.objectFit === 'cover' ? Math.max(W / iw, H / ih) : Math.min(W / iw, H / ih);
-            o.drawImage(el, (W - iw * sc) / 2, (H - ih * sc) / 2, iw * sc, ih * sc);
+            // honour object-position, so the glyphs land exactly where the picture is drawn
+            const [px, py] = objectPos(cs.objectPosition);
+            o.drawImage(el, px(W - iw * sc, dp), py(H - ih * sc, dp), iw * sc, ih * sc);
           } else o.drawImage(el, 0, 0, W, H);
         } else if (el instanceof HTMLCanvasElement || el instanceof HTMLVideoElement) {
           o.drawImage(el, 0, 0, W, H);
@@ -1111,8 +1133,18 @@ class Controller implements AsciiRevealController {
       const wave = Math.min(Math.hypot(t.cx - env.origin.x, t.cy - env.origin.y) / vel, tm.maxWave * env.scale);
       t.offset = wave + (t.insideSurface && dir > 0 ? tm.onSurface * env.scale : 0);
     }
-    if (dir > 0 && targets.some((t) => t.ready)) await Promise.all(targets.map((t) => t.ready?.()));
-    for (const t of targets) t.prepare?.();
+    // text starts decoding right away; an image that is still loading joins the wave once it has decoded
+    // (waiting for every image first left the whole block blank for as long as the slowest image took)
+    for (const t of targets) {
+      if (dir > 0 && t.ready) {
+        t.pending = true;
+        t.ready().then(() => {
+          t.prepare?.();
+          t.pending = false;
+          if (run.live) t.offset = Math.max(t.offset, performance.now() - run.start);
+        });
+      } else t.prepare?.();
+    }
     if (this.destroyed || !targets.some((t) => owner.get(t.key) === run)) {
       (layer as Layer | null)?.live.remove();
       (layer as Layer | null)?.bake.remove();

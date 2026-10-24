@@ -16,8 +16,8 @@ const fixture = `<!doctype html><meta charset="utf-8">
   <article data-ascii="surface" style="padding:12px;border-radius:12px;background:#f3f3f3"><p data-value>42 ms</p></article>
 </div>
 <script type="module">
-  import { createAsciiReveal, asciiSkeletonHTML } from '/dist/core.js';
-  window.lib = { createAsciiReveal, asciiSkeletonHTML };
+  import { createAsciiReveal, asciiSkeletonHTML, animateSkeletons } from '/dist/core.js';
+  window.lib = { createAsciiReveal, asciiSkeletonHTML, animateSkeletons };
   window.ready = true;
 </script>`;
 
@@ -99,8 +99,17 @@ await page.evaluate(async () => {
 check('loading cycle completes', (await hiddenCount()) === 0 && (await page.textContent('[data-value]')) === '57 ms');
 
 // 5. skeleton markup renders without the engine
-const sk = await page.evaluate(() => { const d = document.createElement('div'); d.innerHTML = window.lib.asciiSkeletonHTML({ lines: 2 }); document.body.append(d); return d.querySelectorAll('.ars-line').length; });
-check('asciiSkeletonHTML renders lines', sk === 2);
+const sk = await page.evaluate(() => { const d = document.createElement('div'); d.innerHTML = window.lib.asciiSkeletonHTML({ lines: 2 }) + window.lib.asciiSkeletonHTML({ lines: 2, animate: false, css: false }); document.body.append(d); const [a, b] = d.querySelectorAll('.ars'); return [a.querySelectorAll('.ars-line').length, a.hasAttribute('data-ars-animate') ? 1 : 0, b.hasAttribute('data-ars-animate') ? 1 : 0].join(','); });
+check('asciiSkeletonHTML renders lines; animate flag only when animated', sk === '2,1,0', sk);
+const shimmer = await page.evaluate(async () => {
+  const stop = window.lib.animateSkeletons(document);
+  await new Promise((r) => setTimeout(r, 300));
+  const c = document.querySelector('[data-ars-animate] > canvas');
+  const px = c ? c.getContext('2d').getImageData(0, 0, c.width, c.height).data.some((v, i) => i % 4 === 3 && v > 0) : false;
+  stop();
+  return [!!c, px, !!document.querySelector('[data-ars-animate] > canvas')].join(',');
+});
+check('animateSkeletons draws the shimmer on a canvas and cleans up', shimmer === 'true,true,false', shimmer);
 
 // 6. destroy cleans up the overlay
 await page.evaluate(() => window.c.destroy());
