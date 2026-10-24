@@ -78,6 +78,11 @@ Skeletons exist to paint instantly while data loads. `AsciiSkeleton` does exactl
 
 **1. Skeleton only.** A drop-in replacement for a gray skeleton. Content appears as normal when it arrives.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/readme/skonly-dark.webp">
+  <img src="assets/readme/skonly-light.webp" alt="Three cards show ASCII dither skeletons, then the real content appears as each card's data arrives" width="100%">
+</picture>
+
 ```tsx
 import { AsciiSkeleton } from 'ascii-reveal';
 
@@ -85,6 +90,11 @@ import { AsciiSkeleton } from 'ascii-reveal';
 ```
 
 **2. Skeleton + reveal.** The skeleton paints first; when the data arrives, the real content decodes in (about 400 ms).
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/readme/skreveal-dark.webp">
+  <img src="assets/readme/skreveal-light.webp" alt="Three cards show ASCII dither skeletons, then the real content decodes in through a character grid" width="100%">
+</picture>
 
 ```tsx
 import { AsciiReveal, AsciiSkeleton } from 'ascii-reveal';
@@ -147,6 +157,11 @@ Content that arrives in server-rendered HTML is never hidden on hydration: it's 
 ### Loading mascots
 
 Swap the shimmer for an animated ASCII mascot while data loads. It dissolves as the new content decodes in.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/readme/mascot-dark.webp">
+  <img src="assets/readme/mascot-light.webp" alt="A spider, a ghost and a pumpkin drawn in ASCII play while three cards load, then dissolve as the content decodes in" width="100%">
+</picture>
 
 ```tsx
 <AsciiReveal loading={isLoading} mascot="spider">  {/* spider | ghost | pumpkin | bat */}

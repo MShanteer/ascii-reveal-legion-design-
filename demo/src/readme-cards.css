@@ -1,0 +1,17 @@
+/* README animations: the three demo cards, recorded per loading mode */
+html, body { overflow: hidden; }
+body::before { display: none !important; }
+.rc { width: 1140px; padding: 40px; box-sizing: border-box; }
+.rc .grid { gap: 20px; }
+.rc .card { height: 400px; cursor: default; overflow: hidden; }
+.rc .card > .ar-root, .rc .card > div { display: flex; flex-direction: column; gap: 16px; flex: 1; min-height: 0; }
+.rc-fill { display: flex; flex-direction: column; gap: 16px; flex: 1; min-height: 0; }
+.rc .photo-sk { aspect-ratio: 4 / 3; }
+.rc .photo-sk .ars-block, .rc .chart-sk .ars-block { width: 100% !important; height: 100% !important; }
+.rc .chart-sk { aspect-ratio: 16 / 10; }
+.rc .btn-sk { --ars-radius: 999px; }
+.rc .btn-sk .ars-block { border-radius: 999px; }
+.rc .rows-2 { display: flex; gap: 10px; }
+.rc .rows-2 > * { flex: 1; }
+.rc .photo-sk, .rc .chart-sk { position: relative; overflow: hidden; min-height: 0; border-radius: 12px; }
+.rc .photo-sk > .ars, .rc .chart-sk > .ars { position: absolute; inset: 0; }
