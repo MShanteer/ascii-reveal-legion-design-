@@ -46,3 +46,14 @@ export function parseColor(s: string): [number, number, number, number] | null {
 
 export const toRgba = (c: [number, number, number, number], a = c[3]) =>
   `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+
+/**
+ * Remove a canvas and release its pixel memory right away. Safari (iOS especially) caps total canvas memory
+ * and only frees a detached canvas when it is garbage-collected; past the cap, new canvases silently fail.
+ */
+export function freeCanvas(c: HTMLCanvasElement | null | undefined) {
+  if (!c) return;
+  c.width = 0;
+  c.height = 0;
+  c.remove();
+}

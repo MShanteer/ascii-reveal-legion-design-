@@ -1,5 +1,5 @@
 import { resolvePreset, type Preset, type PresetName } from './presets';
-import { clamp, dpr as getDpr, ease, easeIO, hash, isBrowser, parseColor, reducedMotion } from './util';
+import { clamp, dpr as getDpr, ease, easeIO, freeCanvas, hash, isBrowser, parseColor, reducedMotion } from './util';
 import { imageMascot, mascots, type MascotDraw, type MascotName } from './mascots';
 
 /* ------------------------------------------------------------------ */
@@ -235,16 +235,46 @@ function kick() {
   }
 }
 
+// Mobile browsers pause or slow animation frames while the page is being scrolled; those gaps say nothing
+// about whether the effect itself is too heavy, so the watchdog ignores frames around scrolling.
+let lastScroll = -Infinity;
+if (isBrowser()) {
+  const mark = () => (lastScroll = performance.now());
+  for (const ev of ['scroll', 'touchmove', 'wheel']) window.addEventListener(ev, mark, { passive: true, capture: true });
+}
+
 function tick() {
+  // schedule first: an error while drawing must never stop the loop for every later reveal on the page
+  raf = requestAnimationFrame(tick);
+  try {
+    step();
+  } catch (err) {
+    // drop whatever was animating (its content is shown as-is) and keep going
+    for (const run of Array.from(runs)) {
+      try { finishRun(run); } catch { runs.delete(run); run.resolve(); }
+    }
+    for (const loop of Array.from(loops)) freeCanvas((loop as { canvas?: HTMLCanvasElement }).canvas);
+    loops.clear();
+    if (typeof console !== 'undefined') console.error('[ascii-reveal]', err);
+  }
+  if (!runs.size && !loops.size) {
+    cancelAnimationFrame(raf);
+    raf = 0;
+  }
+}
+
+function step() {
   const now = performance.now();
   // watchdog: if frames keep blowing the budget while runs are animating, finish them instead of stuttering
   if (lastTick && runs.size) {
     const dt = now - lastTick;
-    slowFrames = dt > 45 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
+    // a very long gap is a paused tab or a phone waking up, not a slow frame
+    const counts = dt < 400 && now - lastScroll > 250;
+    slowFrames = counts && dt > 45 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
     if (slowFrames >= 8) {
       let fired = false;
       for (const run of Array.from(runs)) if (run.ctrl.opts.fallback !== false) { finishRun(run); fired = true; }
-      if (fired) degradedUntil = performance.now() + 10_000;
+      if (fired) degradedUntil = performance.now() + 4_000;
       slowFrames = 0;
     }
   }
@@ -283,7 +313,6 @@ function tick() {
     if (finished) finishRun(run);
   }
   for (const loop of Array.from(loops)) if (!loop.render(now)) loops.delete(loop);
-  raf = runs.size || loops.size ? requestAnimationFrame(tick) : 0;
 }
 
 function finishRun(run: Run) {
@@ -296,8 +325,8 @@ function finishRun(run: Run) {
     if (run.dir > 0) release(t.holdEl, t.holdName);
     else run.ctrl.markHidden(t.holdEl, t.holdName);
   }
-  run.layer?.live.remove();
-  run.layer?.bake.remove();
+  freeCanvas(run.layer?.live);
+  freeCanvas(run.layer?.bake);
   run.ctrl.active(-1);
   run.resolve();
 }
@@ -690,8 +719,9 @@ function mediaTarget(el: HTMLElement, env: Env, layer: () => Layer): Target | nu
       }
     },
     prepare() {
+      let off: HTMLCanvasElement | null = null;
       try {
-        const off = document.createElement('canvas');
+        off = document.createElement('canvas');
         off.width = W;
         off.height = H;
         const o = off.getContext('2d', { willReadFrequently: true })!;
@@ -710,6 +740,8 @@ function mediaTarget(el: HTMLElement, env: Env, layer: () => Layer): Target | nu
         data = o.getImageData(0, 0, W, H).data;
       } catch {
         data = null; // cross-origin or unknown element: use a neutral glyph texture
+      } finally {
+        freeCanvas(off);
       }
     },
     render(lt, _dir, paint) {
@@ -1146,8 +1178,8 @@ class Controller implements AsciiRevealController {
       } else t.prepare?.();
     }
     if (this.destroyed || !targets.some((t) => owner.get(t.key) === run)) {
-      (layer as Layer | null)?.live.remove();
-      (layer as Layer | null)?.bake.remove();
+      freeCanvas((layer as Layer | null)?.live);
+      freeCanvas((layer as Layer | null)?.bake);
       run.resolve();
       return run.done;
     }
@@ -1249,7 +1281,7 @@ class Controller implements AsciiRevealController {
         const fin = clamp(lt / 260);
         const fout = loop.stopAt === Infinity ? 1 : 1 - clamp((now - loop.stopAt) / 260);
         if (fout <= 0) {
-          canvas.remove();
+          freeCanvas(canvas);
           if (this.shimmerLoop === loop) this.shimmerLoop = null;
           return false;
         }
@@ -1326,7 +1358,8 @@ class Controller implements AsciiRevealController {
         const fin = clamp(lt / 320);
         const gone = loop.stopAt === Infinity ? 0 : clamp((now - loop.stopAt) / 450);
         if (gone >= 1) {
-          canvas.remove();
+          freeCanvas(canvas);
+          freeCanvas(off);
           if (this.shimmerLoop === loop) this.shimmerLoop = null;
           return false;
         }
@@ -1386,8 +1419,8 @@ class Controller implements AsciiRevealController {
         t.dispose();
         release(t.holdEl, t.holdName);
       }
-      run.layer?.live.remove();
-      run.layer?.bake.remove();
+      freeCanvas(run.layer?.live);
+      freeCanvas(run.layer?.bake);
       run.resolve();
     }
     this.activeRuns = 0;
@@ -1395,7 +1428,7 @@ class Controller implements AsciiRevealController {
     this.hidden.clear();
     if (this.shimmerLoop) {
       loops.delete(this.shimmerLoop);
-      this.shimmerLoop.canvas.remove();
+      freeCanvas(this.shimmerLoop.canvas);
       this.shimmerLoop = null;
     }
     if (this.ownOverlay) this.overlay.remove();

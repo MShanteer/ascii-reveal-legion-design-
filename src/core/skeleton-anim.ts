@@ -7,7 +7,7 @@
  * every row's glyphs are rasterised once, and a frame only copies the band region.
  */
 import { BLOCK_LEN, glyphRow, LINE_LEN, SKELETON_VARIANTS, type SkeletonVariant } from './skeleton';
-import { isBrowser, reducedMotion } from './util';
+import { freeCanvas, isBrowser, reducedMotion } from './util';
 
 const FPS_MS = 33; // ~30 fps: the glyphs only change every 120 ms anyway
 const FLICK_MS = 120;
@@ -73,6 +73,7 @@ function measure(S: Sk): () => void {
   const variant = variantOf(root);
   const seed = Number(root.getAttribute('data-ars-animate')) || 1;
   let waveColor = cs.getPropertyValue('--ars-wave-color').trim();
+  for (const R of S.rows) freeCanvas(R.img);
   S.rows = Array.from(root.querySelectorAll<HTMLElement>('.ars-line,.ars-block')).map((el, i) => {
     const r = el.getBoundingClientRect();
     const base = el.querySelector<HTMLElement>('.ars-base') || el;
@@ -214,7 +215,9 @@ function stop(S: Sk) {
   byRoot.delete(S.root);
   S.ro?.disconnect();
   io?.unobserve(S.root);
-  S.canvas.remove();
+  freeCanvas(S.canvas);
+  for (const R of S.rows) freeCanvas(R.img);
+  S.rows = [];
 }
 
 /** Start the shimmer on every animated skeleton inside `scope` (for markup from `asciiSkeletonHTML`). */

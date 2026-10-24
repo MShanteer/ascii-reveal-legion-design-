@@ -1040,9 +1040,11 @@ export default function App() {
         const el = spooky.current;
         if (!el) return;
         let timer = 0;
+        const canHover = matchMedia("(hover: hover)").matches;
         const run = () => setSpookyRun((n) => n + 1);
         const tick = () => {
-            if (!el.matches(":hover")) run();
+            // touch screens keep :hover after a tap, so only real pointers pause it
+            if (!(canHover && el.matches(":hover"))) run();
         }; // repeats pause while you hover
         const io = new IntersectionObserver(
             ([e]) => {
@@ -1142,7 +1144,7 @@ export default function App() {
     const seg = <T extends string>(
         value: T,
         set: (v: T) => void,
-        options: [T, string][],
+        options: [T, React.ReactNode][],
         label: string,
     ) => (
         <div className="seg" role="group" aria-label={label}>
@@ -1283,7 +1285,13 @@ export default function App() {
                                     [
                                         ["center", "Center"],
                                         ["corner", "Corner"],
-                                        ["cursor", "Cursor"],
+                                        [
+                                            "cursor",
+                                            <>
+                                                <span className="on-pointer">Cursor</span>
+                                                <span className="on-touch">Tap</span>
+                                            </>,
+                                        ],
                                     ],
                                     "Wave origin",
                                 )}
@@ -1317,7 +1325,11 @@ export default function App() {
 
                         <section className="sec demo" aria-label="Demo cards">
                             <div className="demo-head">
-                                <p>Click a card to replay it from that point</p>
+                                <p>
+                                    <span className="on-pointer">Click</span>
+                                    <span className="on-touch">Tap</span> a card
+                                    to replay it from that point
+                                </p>
                                 <p>Redeploy runs the loading → loaded cycle</p>
                             </div>
 
