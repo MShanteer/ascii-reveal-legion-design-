@@ -2,8 +2,8 @@
 
 <a href="https://quanhoangindex.github.io/ascii-reveal/">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/quanhoangindex/ascii-reveal/main/.github/assets/ascii-reveal-demo-dark.webp">
-    <img src="https://raw.githubusercontent.com/quanhoangindex/ascii-reveal/main/.github/assets/ascii-reveal-demo-light.webp" alt="Three cards load as ASCII skeletons, then their real content decodes in through a character grid" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/readme/ascii-reveal-demo-dark.webp">
+    <img src="assets/readme/ascii-reveal-demo-light.webp" alt="Three cards load as ASCII skeletons, then their real content decodes in through a character grid" width="100%">
   </picture>
 </a>
 
