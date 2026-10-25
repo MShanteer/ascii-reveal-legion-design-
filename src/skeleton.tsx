@@ -4,7 +4,7 @@ import { animateSkeleton } from './core/skeleton-anim';
 import type { AsciiQuality } from './core/quality';
 
 export interface AsciiSkeletonProps extends Omit<HTMLAttributes<HTMLElement>, 'children'> {
-  /** Glyph style: `dither` (shaded blocks, default), `scan` (decode glyphs), `braille` (fine dots), `terminal` (0/1 in your accent color). */
+  /** Glyph style: `dither` (shaded blocks, default), `scan` (decode glyphs), `braille` (fine dots), `terminal` (0/1 in your accent color), `legion` (dither and scan, swept by a band in your accent color). */
   variant?: SkeletonVariant;
   /** Number of text lines. Default 3. */
   lines?: number;

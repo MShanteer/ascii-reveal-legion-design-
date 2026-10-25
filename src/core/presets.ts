@@ -1,4 +1,4 @@
-export type PresetName = 'decode' | 'dither' | 'terminal' | 'blueprint';
+export type PresetName = 'decode' | 'dither' | 'terminal' | 'blueprint' | 'legion';
 
 export interface Preset {
   /** Glyphs from empty to dense. The first character should be a space. */
@@ -52,6 +52,19 @@ export const presets: Record<PresetName, Preset> = {
     color: 'accent',
     cells: [26, 18, 13, 9, 7],
     tick: 95,
+    accentGlyphs: true,
+  },
+  // The Legion look: a terminal printing in gold. Characters start as a block cursor, condense through
+  // dots and operators to solid blocks, flicker through hex and punctuation, then lock to their real value.
+  // Glyphs, surface dots and image glyphs take --ascii-accent (gold in legion.css). Calm tick, no loop.
+  legion: {
+    ramp: ' .:-=+*#▒█',
+    scramble: '0123456789ABCDEF<>/\\[]{}_=+-;:#',
+    mode: 'ramp',
+    color: 'accent',
+    cells: [22, 15, 10, 7, 6],
+    tick: 52,
+    cursor: '▌',
     accentGlyphs: true,
   },
 };

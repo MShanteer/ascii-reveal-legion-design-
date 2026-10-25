@@ -1,0 +1,37 @@
+/*
+ * ascii-reveal-legion/legion.css: the Legion design tokens for the loading engine. Dark only.
+ *
+ *   import 'ascii-reveal-legion/legion.css';        // once, in your root layout
+ *
+ * The engine reads the --ascii-* variables from the element it is attached to, so setting them on :root
+ * (below) themes every AsciiReveal, AsciiSkeleton and AsciiLoader on the page. To theme one region instead,
+ * leave this file out of :root by overriding the variables on that region, or add the .ascii-legion class
+ * to it for the surface and text colors too.
+ *
+ * Palette: surface #0a0a0b, text #f5f4f0, muted #a8a6a0, gold #e8c16a.
+ */
+:root,
+.ascii-legion {
+  --legion-bg: #0a0a0b;
+  --legion-text: #f5f4f0;
+  --legion-muted: #a8a6a0;
+  --legion-gold: #e8c16a;
+  --legion-gold-pale: #f6e6b8;
+
+  /* read by the engine */
+  --ascii-accent: var(--legion-gold);        /* cursor, lit glyphs, the skeleton band, the loader cursor */
+  --ascii-glyph: var(--legion-muted);        /* scramble glyphs for presets that do not use the accent */
+  --ascii-skeleton: var(--legion-muted);     /* still glyph pattern of a skeleton */
+  --ascii-flash: var(--legion-gold-pale);    /* brief color as each character lands */
+  --ascii-surface: var(--legion-bg);         /* what transparent images sit on */
+  --ascii-mascot: var(--legion-gold);        /* antler, thinking dots and other line-art mascots */
+  /* your mono font if the app exposes one as a CSS variable, otherwise the system mono stack */
+  --ascii-font: var(--legion-font-mono, var(--font-mono, var(--font-geist-mono, ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace)));
+}
+
+/* the page surface, for apps that want it from here */
+.ascii-legion {
+  background: var(--legion-bg);
+  color: var(--legion-text);
+  color-scheme: dark;
+}

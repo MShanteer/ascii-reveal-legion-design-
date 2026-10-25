@@ -40,7 +40,7 @@ export interface AsciiRevealProps extends Omit<HTMLAttributes<HTMLElement>, 'chi
   children?: ReactNode;
   /** Element to render as the wrapper. Default `div`. */
   as?: ElementType;
-  /** `decode` (default), `dither`, `terminal`, `blueprint`, or a custom preset object. */
+  /** `decode` (default), `dither`, `terminal`, `blueprint`, `legion`, or a custom preset object. */
   preset?: PresetName | Preset;
   /** Playback speed multiplier. Default 1. */
   speed?: number;
@@ -66,7 +66,7 @@ export interface AsciiRevealProps extends Omit<HTMLAttributes<HTMLElement>, 'chi
   shimmer?: boolean;
   /**
    * Replace the shimmer with an animated ASCII mascot while loading:
-   * `spider`, `ghost`, `pumpkin`, `bat`, an SVG URL or markup, or a draw function.
+   * `spider`, `ghost`, `pumpkin`, `bat`, `antler`, `thinking`, `legion-mark`, an SVG URL or markup, or a draw function.
    */
   mascot?: MascotName | string | MascotDraw | null;
   /** Reveal sections below the fold as they scroll into view. Default true. */

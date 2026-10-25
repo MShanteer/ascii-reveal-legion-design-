@@ -8,7 +8,7 @@
  */
 import { hash } from './util';
 
-export type SkeletonVariant = 'dither' | 'scan' | 'braille' | 'terminal';
+export type SkeletonVariant = 'dither' | 'scan' | 'braille' | 'terminal' | 'legion';
 
 interface VariantSpec {
   base: string;
@@ -24,6 +24,8 @@ export const SKELETON_VARIANTS: Record<SkeletonVariant, VariantSpec> = {
   scan: { base: '··:·:-', wave: '+=*#%@&$', gap: 0.08, bias: 1.6 },
   braille: { base: '⠢⠔⠑⠊⠡⠌⠒⠤⠕⠪', wave: '⣿⣷⣯⣟⡿⢿⣻⣽⣾⣶', gap: 0.02, bias: 1 },
   terminal: { base: '01', wave: '01', gap: 0.12, bias: 1 },
+  // dither shading with scan dots in the still pattern; the band that sweeps through is dense blocks and operators in --ascii-accent
+  legion: { base: '░·░░▒·░', wave: '·+=*#▒▓█', gap: 0.06, bias: 1 },
 };
 
 /** @deprecated kept for v0.3 compatibility; use SKELETON_VARIANTS. */
@@ -50,7 +52,9 @@ export const SKELETON_CSS = `
 .ars-dither .ars-line{line-height:1;letter-spacing:-.02em}
 .ars-braille{--ars-base:.35;--ars-wave:1;--ars-band:40%}
 .ars-scan{--ars-base:.28;--ars-wave:.95;--ars-band:38%}
-.ars-terminal{--ars-base:.16;--ars-wave:1;--ars-band:35%;--ars-speed:1.5s;--ars-wave-color:var(--ascii-accent,currentColor)}`;
+.ars-terminal{--ars-base:.16;--ars-wave:1;--ars-band:35%;--ars-speed:1.5s;--ars-wave-color:var(--ascii-accent,currentColor)}
+.ars-legion{--ars-base:.26;--ars-wave:.95;--ars-band:42%;--ars-speed:1.7s;--ars-wave-color:var(--ascii-accent,currentColor)}
+.ars-legion .ars-line{letter-spacing:-.02em}`;
 
 /** Glyphs per row: enough for ~900 px of text line or ~800 px of block at the default sizes. */
 export const LINE_LEN = 120, BLOCK_LEN = 96;

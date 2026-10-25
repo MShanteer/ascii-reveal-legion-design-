@@ -13,7 +13,9 @@
     "url": "https://github.com/quanhoangindex/ascii-reveal/issues"
   },
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "*.css"
+  ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -38,6 +40,7 @@
         "default": "./dist/core.cjs"
       }
     },
+    "./legion.css": "./dist/legion.css",
     "./package.json": "./package.json"
   },
   "files": [
@@ -56,7 +59,7 @@
     "motion"
   ],
   "scripts": {
-    "build": "node scripts/clean-dist.mjs && tsup",
+    "build": "node scripts/clean-dist.mjs && tsup && node scripts/copy-css.mjs",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "demo": "npm --prefix demo run dev",
