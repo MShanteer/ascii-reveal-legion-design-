@@ -1,7 +1,7 @@
-import * as React from 'react';
+import * as react from 'react';
 import { HTMLAttributes, ReactNode, ElementType } from 'react';
 
-type PresetName = 'decode' | 'dither' | 'terminal' | 'blueprint';
+type PresetName = 'decode' | 'dither' | 'terminal' | 'blueprint' | 'legion';
 interface Preset {
     /** Glyphs from empty to dense. The first character should be a space. */
     ramp: string;
@@ -28,8 +28,19 @@ declare function resolvePreset(p: PresetName | Preset | undefined): Preset;
  * through the glyph grid, so it shows up as living ASCII art while content loads.
  * Every draw function fills a w×h box at time t (seconds).
  */
-type MascotName = 'spider' | 'ghost' | 'pumpkin' | 'bat';
-type MascotDraw = (ctx: CanvasRenderingContext2D, w: number, h: number, t: number, color: string) => void;
+type MascotName = 'spider' | 'ghost' | 'pumpkin' | 'bat' | 'antler' | 'thinking' | 'legion-mark';
+type MascotDraw = ((ctx: CanvasRenderingContext2D, w: number, h: number, t: number, color: string) => void) & {
+    /** Set by mascots that load an image: resolves when it can be drawn, so a still frame can be repainted once. */
+    ready?: Promise<unknown>;
+};
+/** The Legion antler as SVG markup (the brand glyph, cropped to the mark so it fills its box). Used by the `legion-mark` mascot. */
+declare const LEGION_MARK_SVG: string;
+/**
+ * A logo mascot from SVG markup (or an SVG URL): the mark scans in from the top once, then holds with a very slow
+ * breath of opacity. With no argument it is the Legion antler exactly as drawn in the brand file. The image loads on the
+ * first frame, so importing this costs nothing on the server.
+ */
+declare function legionMark(svg?: string): MascotDraw;
 declare const mascots: Record<MascotName, MascotDraw>;
 /** A custom mascot from an SVG URL or SVG markup, gently floating. */
 declare function imageMascot(src: string): MascotDraw;
@@ -54,7 +65,7 @@ type ResolvedQuality = 'full' | 'lite' | 'off';
 interface AsciiLimits {
     /** At most this many skeletons shimmer at once; the rest keep their still glyph pattern. Default 6. */
     maxAnimatedSkeletons: number;
-    /** Total area (CSS px²) of the skeletons that shimmer at once. Default 800 000 (about 1000 × 800). */
+    /** Total area (CSS px²) of the skeletons that shimmer at once. Default 800 000 (about 1000 × 800). The first skeleton is always allowed, however large. */
     maxAnimatedArea: number;
 }
 /** Set the global quality. Running skeletons and loaders react immediately. An unknown value falls back to `auto`. */
@@ -99,7 +110,7 @@ interface AsciiRevealOptions {
     overlay?: HTMLElement;
     /**
      * Show an animated ASCII mascot while loading instead of the plain shimmer:
-     * `spider`, `ghost`, `pumpkin`, `bat`, an SVG URL, SVG markup, or your own draw function.
+     * `spider`, `ghost`, `pumpkin`, `bat`, `antler`, `thinking`, `legion-mark`, an SVG URL, SVG markup, or your own draw function.
      */
     mascot?: MascotName | string | MascotDraw | null;
     /**
@@ -150,7 +161,7 @@ interface AsciiRevealProps extends Omit<HTMLAttributes<HTMLElement>, 'children'>
     children?: ReactNode;
     /** Element to render as the wrapper. Default `div`. */
     as?: ElementType;
-    /** `decode` (default), `dither`, `terminal`, `blueprint`, or a custom preset object. */
+    /** `decode` (default), `dither`, `terminal`, `blueprint`, `legion`, or a custom preset object. */
     preset?: PresetName | Preset;
     /** Playback speed multiplier. Default 1. */
     speed?: number;
@@ -176,7 +187,7 @@ interface AsciiRevealProps extends Omit<HTMLAttributes<HTMLElement>, 'children'>
     shimmer?: boolean;
     /**
      * Replace the shimmer with an animated ASCII mascot while loading:
-     * `spider`, `ghost`, `pumpkin`, `bat`, an SVG URL or markup, or a draw function.
+     * `spider`, `ghost`, `pumpkin`, `bat`, `antler`, `thinking`, `legion-mark`, an SVG URL or markup, or a draw function.
      */
     mascot?: MascotName | string | MascotDraw | null;
     /** Reveal sections below the fold as they scroll into view. Default true. */
@@ -197,7 +208,7 @@ interface AsciiRevealProps extends Omit<HTMLAttributes<HTMLElement>, 'children'>
  * Mark cards with `data-ascii="surface"`, buttons or chips with `data-ascii="fade"`,
  * and anything to leave alone with `data-ascii="skip"`.
  */
-declare const AsciiReveal: React.ForwardRefExoticComponent<AsciiRevealProps & React.RefAttributes<AsciiRevealHandle>>;
+declare const AsciiReveal: react.ForwardRefExoticComponent<AsciiRevealProps & react.RefAttributes<AsciiRevealHandle>>;
 /**
  * Attach the effect to an element you render yourself.
  * Returns a ref callback plus `reveal` / `hide`.
@@ -215,7 +226,61 @@ declare function useAsciiReveal(options?: {
     hide: (o?: RunOptions) => Promise<void>;
 };
 
-type SkeletonVariant = 'dither' | 'scan' | 'braille' | 'terminal';
+type LoaderVariant = 'cursor' | 'thinking';
+interface LoaderSpec {
+    /** Text next to the cursor. Default `loading` (`thinking` for the thinking variant). */
+    label?: string;
+    /** `cursor`: `▌ loading`. `thinking`: `▌ thinking` followed by three dots that swell one after another (CSS only). */
+    variant?: LoaderVariant;
+    /** Blink the cursor. Default true. The blink is a CSS opacity animation; it is off with reduced motion. */
+    blink?: boolean;
+    /** Include the stylesheet. Default true; set false when you've added `LOADER_CSS` to the page once. */
+    css?: boolean;
+}
+/** HTML string for non-React use: `el.innerHTML = asciiLoaderHTML()`, then `animateLoaders(el)` for the decode. */
+declare function asciiLoaderHTML(spec?: LoaderSpec): string;
+/**
+ * Start the decode on one loader root (an element with class `arl`) and keep it in step with the quality setting.
+ * Returns a function that stops it and leaves the final label in place. Safe to call on the server (does nothing).
+ */
+declare function animateLoader(root: HTMLElement, options?: {
+    quality?: AsciiQuality;
+}): () => void;
+/** Start the decode on every loader inside `scope` (for markup from `asciiLoaderHTML`). */
+declare function animateLoaders(scope?: ParentNode, options?: {
+    quality?: AsciiQuality;
+}): () => void;
+
+interface AsciiLoaderProps extends Omit<HTMLAttributes<HTMLElement>, 'children'> {
+    /** Text next to the cursor. Default `loading` (`thinking` for the thinking variant). */
+    label?: string;
+    /** `cursor`: `▌ loading`. `thinking`: `▌ thinking` and three dots that swell one after another, for an AI "model is thinking" state. */
+    variant?: LoaderVariant;
+    /** Blink the cursor. Default true. A CSS opacity animation, never on with reduced motion. */
+    blink?: boolean;
+    /**
+     * Performance guardrail for this loader; overrides the global `setAsciiQuality`. With `lite` / `off`, or reduced motion,
+     * the loader is a still `▌ loading`: no decode, no blink, nothing scheduled.
+     */
+    quality?: AsciiQuality;
+    /** Element to render as. Default `span`. */
+    as?: ElementType;
+}
+/**
+ * A single-line terminal loading indicator that replaces spinners: `▌ loading`.
+ * Render it while something loads and remove it when the data arrives.
+ *
+ * It is plain HTML and CSS, so it server-renders and paints at once. When it appears, the label decodes into place
+ * (about 0.4 s); after that nothing runs in JavaScript. Screen readers get a polite "loading" status.
+ *
+ * ```tsx
+ * {isLoading ? <AsciiLoader /> : <Results data={data} />}
+ * {isThinking && <AsciiLoader variant="thinking" />}
+ * ```
+ */
+declare function AsciiLoader({ label, variant, blink, quality, as, className, ...rest }: AsciiLoaderProps): react.ReactElement<any, string | react.JSXElementConstructor<any>>;
+
+type SkeletonVariant = 'dither' | 'scan' | 'braille' | 'terminal' | 'legion';
 interface SkeletonSpec {
     /** Glyph style. Default `dither`. */
     variant?: SkeletonVariant;
@@ -236,7 +301,7 @@ interface SkeletonSpec {
 declare function asciiSkeletonHTML(spec?: SkeletonSpec): string;
 
 interface AsciiSkeletonProps extends Omit<HTMLAttributes<HTMLElement>, 'children'> {
-    /** Glyph style: `dither` (shaded blocks, default), `scan` (decode glyphs), `braille` (fine dots), `terminal` (0/1 in your accent color). */
+    /** Glyph style: `dither` (shaded blocks, default), `scan` (decode glyphs), `braille` (fine dots), `terminal` (0/1 in your accent color), `legion` (dither and scan, swept by a band in your accent color). */
     variant?: SkeletonVariant;
     /** Number of text lines. Default 3. */
     lines?: number;
@@ -274,7 +339,7 @@ interface AsciiSkeletonProps extends Omit<HTMLAttributes<HTMLElement>, 'children
  * </AsciiReveal>
  * ```
  */
-declare function AsciiSkeleton({ variant, lines, widths, rows, width, height, circle, seed, animate, quality, as, style, className, ...rest }: AsciiSkeletonProps): React.ReactElement<any, string | React.JSXElementConstructor<any>>;
+declare function AsciiSkeleton({ variant, lines, widths, rows, width, height, circle, seed, animate, quality, as, style, className, ...rest }: AsciiSkeletonProps): react.ReactElement<any, string | react.JSXElementConstructor<any>>;
 
 /**
  * Start the shimmer on one skeleton root (an element with class `ars`). Returns a function that stops it.
@@ -288,4 +353,4 @@ declare function animateSkeletons(scope?: ParentNode, options?: {
     quality?: AsciiQuality;
 }): () => void;
 
-export { type AsciiLimits, type AsciiQuality, AsciiReveal, type AsciiRevealController, type AsciiRevealHandle, type AsciiRevealOptions, type AsciiRevealProps, AsciiSkeleton, type AsciiSkeletonProps, type Duration, type MascotDraw, type MascotName, type Origin, type Preset, type PresetName, type ResolvedQuality, type RunOptions, type SkeletonSpec, type SkeletonVariant, animateSkeleton, animateSkeletons, asciiSkeletonHTML, createAsciiReveal, getAsciiLimits, getAsciiQuality, imageMascot, isLowEndDevice, mascots, presets, resolvePreset, resolveQuality, setAsciiLimits, setAsciiQuality, useAsciiReveal };
+export { type AsciiLimits, AsciiLoader, type AsciiLoaderProps, type AsciiQuality, AsciiReveal, type AsciiRevealController, type AsciiRevealHandle, type AsciiRevealOptions, type AsciiRevealProps, AsciiSkeleton, type AsciiSkeletonProps, type Duration, LEGION_MARK_SVG, type LoaderSpec, type LoaderVariant, type MascotDraw, type MascotName, type Origin, type Preset, type PresetName, type ResolvedQuality, type RunOptions, type SkeletonSpec, type SkeletonVariant, animateLoader, animateLoaders, animateSkeleton, animateSkeletons, asciiLoaderHTML, asciiSkeletonHTML, createAsciiReveal, getAsciiLimits, getAsciiQuality, imageMascot, isLowEndDevice, legionMark, mascots, presets, resolvePreset, resolveQuality, setAsciiLimits, setAsciiQuality, useAsciiReveal };
