@@ -1,0 +1,14 @@
+ascii-reveal-legion
+The Legion design system's loading and reveal engine.
+
+This package is a fork of "ascii-reveal" by Quan Hoang
+(https://github.com/quanhoangindex/ascii-reveal), released under the MIT License.
+The original copyright notice and license text are kept, unchanged, in LICENSE.
+
+Changes made in this fork: performance guardrails (setAsciiQuality, setAsciiLimits,
+zero frames when idle), the `legion` preset and skeleton variant, the `antler`,
+`thinking` and `legion-mark` mascots, AsciiLoader, the Legion theme (legion.css),
+a rewrite of the skeleton scheduler, React 19 / Next 16 compatibility tests, and the
+demo's Legion page. These changes were not made or endorsed by the original author.
+The name "ascii-reveal" belongs to the original project; this fork is published
+under a different name.

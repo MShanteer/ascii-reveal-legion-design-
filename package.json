@@ -1,16 +1,22 @@
 {
-  "name": "ascii-reveal",
-  "version": "0.3.0",
-  "description": "A loading effect for React that decodes text, images and cards into place through a character grid.",
+  "name": "ascii-reveal-legion",
+  "version": "0.4.0-legion.1",
+  "description": "The Legion design system's loading and reveal engine: terminal-style ASCII skeletons, loaders and reveals for React 19 and Next.js 16. A fork of ascii-reveal.",
   "license": "MIT",
   "author": "Quan Hoang",
-  "homepage": "https://quanhoangindex.github.io/ascii-reveal/",
+  "contributors": [
+    {
+      "name": "Moose Shanteer",
+      "url": "https://github.com/MShanteer"
+    }
+  ],
+  "homepage": "https://github.com/MShanteer/ascii-reveal-legion-design-#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/quanhoangindex/ascii-reveal.git"
+    "url": "git+https://github.com/MShanteer/ascii-reveal-legion-design-.git"
   },
   "bugs": {
-    "url": "https://github.com/quanhoangindex/ascii-reveal/issues"
+    "url": "https://github.com/MShanteer/ascii-reveal-legion-design-/issues"
   },
   "type": "module",
   "sideEffects": [
@@ -46,17 +52,21 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "keywords": [
     "react",
+    "nextjs",
     "ascii",
     "loading",
     "reveal",
     "animation",
     "skeleton",
     "text-scramble",
-    "motion"
+    "terminal",
+    "design-system",
+    "legion"
   ],
   "scripts": {
     "build": "node scripts/clean-dist.mjs && tsup && node scripts/copy-css.mjs",
