@@ -1,6 +1,6 @@
 // Browser smoke test for the built package (run `npm run build` first).
-// Usage: node test/smoke.mjs   (needs `npx playwright install chromium` once)
-import { chromium } from 'playwright';
+// Usage: node test/smoke.mjs   (needs `npx playwright install chromium` once, or CHROMIUM_PATH pointing at a Chromium you already have)
+import { launch } from './helpers.mjs';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,6 +24,7 @@ const fixture = `<!doctype html><meta charset="utf-8">
 const server = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
   if (url === '/') { res.writeHead(200, { 'content-type': 'text/html' }); return res.end(fixture); }
+  if (url === '/favicon.ico') { res.writeHead(204); return res.end(); } // newer Chromium asks for it; a 404 would count as a page error
   const f = path.join(root, url);
   if (!f.startsWith(root) || !fs.existsSync(f)) { res.writeHead(404); return res.end(); }
   res.writeHead(200, { 'content-type': 'text/javascript' });
@@ -32,7 +33,7 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(0, r));
 const base = `http://localhost:${server.address().port}/`;
 
-const browser = await chromium.launch();
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));

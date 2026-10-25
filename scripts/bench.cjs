@@ -7,11 +7,11 @@ const { chromium } = require('playwright');
 const http = require('http'), fs = require('fs'), path = require('path');
 const dir = process.argv[2], label = process.argv[3], RUNS = 3;
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
-const server = http.createServer((q, r) => { let f = path.join(dir, decodeURIComponent(q.url.split('?')[0])); if (f.endsWith('/')) f += 'index.html';
+const server = http.createServer((q, r) => { let f = path.join(dir, decodeURIComponent(q.url.split('?')[0])); if (f.endsWith('/') || f.endsWith(path.sep)) f = path.join(f, 'index.html');
   fs.readFile(f, (e, d) => { if (e) { r.writeHead(404); r.end(); return; } r.writeHead(200, { 'content-type': mime[path.extname(f)] || 'application/octet-stream' }); r.end(d); }); });
 (async () => {
   await new Promise((r) => server.listen(0, r)); const url = `http://localhost:${server.address().port}/${process.argv[4] || ''}`;
-  const b = await chromium.launch();
+  const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
   const res = [];
   for (let run = 0; run < RUNS; run++) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: 'dark' });

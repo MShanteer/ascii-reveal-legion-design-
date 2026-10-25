@@ -5,7 +5,7 @@ export default defineConfig([
     entry: { index: 'src/index.ts' },
     format: ['esm', 'cjs'],
     dts: true,
-    clean: true,
+    // no `clean` here: the two builds run in parallel and one would delete the other's output. `npm run build` cleans first.
     sourcemap: false,
     minify: true,
     target: 'es2020',

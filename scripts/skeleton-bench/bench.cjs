@@ -6,7 +6,7 @@ const srv = http.createServer((q, r) => { const f = path.join(__dirname, 'pages'
 const med = (a) => { const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
 (async () => {
   await new Promise((r) => srv.listen(4302, r));
-  const b = await chromium.launch(); const out = [];
+  const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined }); const out = [];
   const bcdp = await b.newBrowserCDPSession();
   const cpuTotal = async () => (await bcdp.send('SystemInfo.getProcessInfo')).processInfo.reduce((s, p) => s + p.cpuTime, 0);
   for (const rate of [1, 4]) for (const n of [1, 12]) for (const kind of ['gray', 'ascii', 'ascii-still']) {
