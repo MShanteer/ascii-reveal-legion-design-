@@ -31,6 +31,49 @@ declare const mascots: Record<MascotName, MascotDraw>;
 /** A custom mascot from an SVG URL or SVG markup, gently floating. */
 declare function imageMascot(src: string): MascotDraw;
 
+/**
+ * Performance guardrails. One global switch decides how much this library is allowed to animate.
+ *
+ * - `full`  everything animates (skeleton shimmer, mascots, the decode reveal, loader label), within the caps below.
+ * - `lite`  nothing runs on requestAnimationFrame: skeletons and loaders are static, mascots are one still frame,
+ *           and a reveal is a single 220 ms fade instead of the decode.
+ * - `off`   nothing animates at all: static placeholders, and content appears instantly.
+ * - `auto`  (default) `full`, except `lite` on low-end devices (4 or fewer logical cores, or 4 GB or less of memory)
+ *           and `off` when the user asks for reduced motion.
+ *
+ * `prefers-reduced-motion` always wins: it resolves to `off` whatever you pass, `full` included.
+ *
+ * The setting lives on `globalThis`, so the main entry and `ascii-reveal-legion/core` always agree on it.
+ */
+type AsciiQuality = 'auto' | 'full' | 'lite' | 'off';
+/** What `auto` turns into on this device, right now. */
+type ResolvedQuality = 'full' | 'lite' | 'off';
+interface AsciiLimits {
+    /** At most this many skeletons shimmer at once; the rest keep their still glyph pattern. Default 6. */
+    maxAnimatedSkeletons: number;
+    /** Total area (CSS px²) of the skeletons that shimmer at once. Default 800 000 (about 1000 × 800). */
+    maxAnimatedArea: number;
+}
+/** Set the global quality. Running skeletons and loaders react immediately. An unknown value falls back to `auto`. */
+declare function setAsciiQuality(quality: AsciiQuality): void;
+/** The global setting as passed to `setAsciiQuality` (not resolved). */
+declare function getAsciiQuality(): AsciiQuality;
+/** Cap how much may shimmer at once. Pass only what you want to change. */
+declare function setAsciiLimits(limits: Partial<AsciiLimits>): void;
+declare function getAsciiLimits(): AsciiLimits;
+/** True on devices that should not run decorative animation: 4 or fewer logical cores, or 4 GB or less of memory. */
+declare function isLowEndDevice(): boolean;
+/**
+ * Resolve a quality setting into what will actually happen. `local` (a component's `quality` prop) beats the global
+ * setting unless it is `auto`; reduced motion beats both.
+ */
+declare function resolveQuality(local?: AsciiQuality): ResolvedQuality;
+/**
+ * Call `fn` whenever the global quality or limits change, or the reduced-motion preference flips.
+ * The media-query listener only exists while somebody is subscribed.
+ */
+declare function subscribeQuality(fn: () => void): () => void;
+
 type Origin = 'center' | 'top-left' | 'pointer' | {
     x: number;
     y: number;
@@ -68,6 +111,11 @@ interface AsciiRevealOptions {
     lazy?: boolean;
     /** If the device can't keep up (frames over ~45 ms), finish instantly instead of stuttering. Default true. */
     fallback?: boolean;
+    /**
+     * Performance guardrail for this reveal; overrides the global `setAsciiQuality`. `auto` (default) animates, except on
+     * low-end devices (`lite`: one short fade, no mascot loop) and with reduced motion (`off`: content appears at once).
+     */
+    quality?: AsciiQuality;
 }
 interface RunOptions {
     origin?: Origin;
@@ -124,9 +172,16 @@ interface SkeletonSpec {
 /** HTML string for non-React use: `el.innerHTML = asciiSkeletonHTML({ lines: 3 })`, then `animateSkeletons()` to start the shimmer. */
 declare function asciiSkeletonHTML(spec?: SkeletonSpec): string;
 
-/** Start the shimmer on one skeleton root (an element with class `ars`). Returns a function that stops it. */
-declare function animateSkeleton(root: HTMLElement): () => void;
+/**
+ * Start the shimmer on one skeleton root (an element with class `ars`). Returns a function that stops it.
+ * It only shimmers while it is on screen, the quality allows it, and it fits under the global caps.
+ */
+declare function animateSkeleton(root: HTMLElement, options?: {
+    quality?: AsciiQuality;
+}): () => void;
 /** Start the shimmer on every animated skeleton inside `scope` (for markup from `asciiSkeletonHTML`). */
-declare function animateSkeletons(scope?: ParentNode): () => void;
+declare function animateSkeletons(scope?: ParentNode, options?: {
+    quality?: AsciiQuality;
+}): () => void;
 
-export { type AsciiRevealController, type AsciiRevealOptions, type Duration, type MascotDraw, type MascotName, type Origin, type Preset, type PresetName, type RunOptions, SKELETON_CSS, SKELETON_VARIANTS, type SkeletonSpec, type SkeletonVariant, animateSkeleton, animateSkeletons, asciiSkeletonHTML, createAsciiReveal, glyphRow, imageMascot, mascots, presets, resolvePreset };
+export { type AsciiLimits, type AsciiQuality, type AsciiRevealController, type AsciiRevealOptions, type Duration, type MascotDraw, type MascotName, type Origin, type Preset, type PresetName, type ResolvedQuality, type RunOptions, SKELETON_CSS, SKELETON_VARIANTS, type SkeletonSpec, type SkeletonVariant, animateSkeleton, animateSkeletons, asciiSkeletonHTML, createAsciiReveal, getAsciiLimits, getAsciiQuality, glyphRow, imageMascot, isLowEndDevice, mascots, presets, resolvePreset, resolveQuality, setAsciiLimits, setAsciiQuality, subscribeQuality };

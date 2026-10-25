@@ -61,7 +61,7 @@
     "typecheck": "tsc --noEmit",
     "demo": "npm --prefix demo run dev",
     "prepublishOnly": "npm run build",
-    "test": "node test/smoke.mjs"
+    "test": "node --test test/quality.test.mjs && node test/smoke.mjs && node test/guardrails.mjs"
   },
   "peerDependencies": {
     "react": ">=17",

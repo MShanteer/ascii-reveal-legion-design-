@@ -5,9 +5,17 @@
  * sweep: a soft band moves across it (rows staggered), and inside the band denser glyphs flicker between two sets.
  * Same look as a CSS mask animation, at roughly a third of the CPU, because the browser never repaints the rows:
  * every row's glyphs are rasterised once, and a frame only copies the band region.
+ *
+ * Guardrails (see quality.ts):
+ * - Only a capped number of skeletons shimmer at once (default 6, and a cap on their total area). The rest keep the
+ *   still pattern. A skeleton only holds a slot while it is on screen, so scrolling hands slots on.
+ * - Under `lite` / `off` quality, reduced motion, and in hidden tabs nothing is scheduled.
+ * - There is no timer. The frame loop runs only while at least one skeleton is shimmering on screen; when none is,
+ *   nothing is scheduled, and it restarts from an observer callback when that changes.
  */
 import { BLOCK_LEN, glyphRow, LINE_LEN, SKELETON_VARIANTS, type SkeletonVariant } from './skeleton';
-import { freeCanvas, isBrowser, reducedMotion } from './util';
+import { getAsciiLimits, resolveQuality, subscribeQuality, type AsciiQuality } from './quality';
+import { freeCanvas, isBrowser } from './util';
 
 const FPS_MS = 33; // ~30 fps: the glyphs only change every 120 ms anyway
 const FLICK_MS = 120;
@@ -23,15 +31,22 @@ interface Row {
 }
 interface Sk {
   root: HTMLElement;
-  canvas: HTMLCanvasElement;
-  ctx: CanvasRenderingContext2D;
+  /** per-skeleton override of the global quality */
+  quality: AsciiQuality | undefined;
+  /** only exists while this skeleton holds one of the capped animation slots */
+  canvas: HTMLCanvasElement | null;
+  ctx: CanvasRenderingContext2D | null;
   rows: Row[];
+  /** holds an animation slot */
+  granted: boolean;
   dirty: boolean;
   visible: boolean;
   band: number; opacity: number; speed: number;
   ro: ResizeObserver | null;
+  /** last seen size; -1 until the first resize callback */
   mw: number; mh: number;
-  /** rAF frame it was added on: measuring waits until the skeleton has painted once */
+  area: number;
+  /** frame count when it was added: measuring waits until the skeleton has painted once */
   born: number;
 }
 
@@ -39,6 +54,7 @@ const all = new Set<Sk>();
 const byRoot = new WeakMap<HTMLElement, Sk>();
 let raf = 0, last = 0, t0 = 0, frame = 0;
 let io: IntersectionObserver | null = null;
+let unsub: (() => void) | null = null;
 
 // cubic-bezier(.45,.05,.55,.95), the same easing as the original CSS sweep
 const EASE = (() => {
@@ -64,7 +80,7 @@ function measure(S: Sk): () => void {
   S.dirty = false;
   const root = S.root;
   const rr = root.getBoundingClientRect();
-  S.mw = rr.width; S.mh = rr.height;
+  S.mw = rr.width; S.mh = rr.height; S.area = rr.width * rr.height;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const cs = getComputedStyle(root);
   S.band = (parseFloat(cs.getPropertyValue('--ars-band')) || 45) / 100;
@@ -113,15 +129,18 @@ function measure(S: Sk): () => void {
     return { i, x: r.left - rr.left, y: r.top - rr.top, w: r.width, h: r.height, radius: Math.min(radius, Math.min(r.width, r.height) / 2), img: c, fh };
   });
   return () => {
-    S.canvas.width = Math.max(1, Math.ceil(rr.width * dpr));
-    S.canvas.height = Math.max(1, Math.ceil(rr.height * dpr));
-    S.canvas.style.width = rr.width + 'px';
-    S.canvas.style.height = rr.height + 'px';
+    const canvas = S.canvas;
+    if (!canvas) return;
+    canvas.width = Math.max(1, Math.ceil(rr.width * dpr));
+    canvas.height = Math.max(1, Math.ceil(rr.height * dpr));
+    canvas.style.width = rr.width + 'px';
+    canvas.style.height = rr.height + 'px';
   };
 }
 
 function draw(S: Sk, t: number) {
-  const { ctx, canvas } = S;
+  const canvas = S.canvas, ctx = S.ctx;
+  if (!canvas || !ctx) return;
   const dpr = canvas.width / Math.max(1, parseFloat(canvas.style.width) || 1);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -151,10 +170,75 @@ function draw(S: Sk, t: number) {
   }
 }
 
+const isLive = (S: Sk) => S.granted && S.visible && S.root.isConnected;
+
+function anyLive() {
+  for (const S of all) if (isLive(S)) return true;
+  return false;
+}
+
+/**
+ * Make the frame loop match the state: scheduled while at least one skeleton is shimmering on screen in a visible tab,
+ * cancelled right away otherwise. This is the only place a frame is requested.
+ */
+function sync() {
+  if (!isBrowser()) return;
+  if (document.hidden || !anyLive()) {
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+  } else if (!raf) raf = requestAnimationFrame(tick);
+}
+
+function setGranted(S: Sk, on: boolean) {
+  if (on === S.granted) return;
+  if (on) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return; // the browser refused another canvas: this one stays a still pattern
+    canvas.setAttribute('aria-hidden', 'true');
+    S.root.appendChild(canvas);
+    S.canvas = canvas;
+    S.ctx = ctx;
+    S.granted = true;
+    S.dirty = true;
+  } else {
+    S.granted = false;
+    for (const R of S.rows) freeCanvas(R.img);
+    S.rows = [];
+    freeCanvas(S.canvas);
+    S.canvas = null;
+    S.ctx = null;
+  }
+}
+
+/**
+ * Decide which skeletons hold an animation slot: on screen, allowed to animate, within the count and area caps.
+ * Earlier skeletons win. Cheap enough to run from any observer callback.
+ */
+function allocate() {
+  const { maxAnimatedSkeletons, maxAnimatedArea } = getAsciiLimits();
+  const global = resolveQuality();
+  let n = 0, area = 0;
+  for (const S of all) {
+    const q = S.quality ? resolveQuality(S.quality) : global;
+    const fits = n < maxAnimatedSkeletons && area + S.area <= maxAnimatedArea;
+    const grant = q === 'full' && S.visible && S.mw >= 0 && S.root.isConnected && fits;
+    if (grant) { n++; area += S.area; }
+    setGranted(S, grant);
+  }
+}
+
+function reallocate() {
+  allocate();
+  sync();
+}
+
 function tick(now: number) {
-  raf = all.size ? requestAnimationFrame(tick) : 0;
+  raf = 0;
   frame++;
-  if (document.hidden || now - last < FPS_MS) return;
+  if (document.hidden || !anyLive()) return; // sync() starts it again when that changes
+  raf = requestAnimationFrame(tick);
+  if (now - last < FPS_MS) return;
   last = now;
   const t = now - t0;
   // measuring rasterises glyphs: spread it over frames (~6 ms each) so a page full of skeletons never blocks input
@@ -163,40 +247,55 @@ function tick(now: number) {
   let budget = 6;
   const writes: (() => void)[] = [];
   for (const S of all) {
-    if (!S.dirty || !S.visible || !S.root.isConnected || budget <= 0 || frame - S.born < 2) continue;
+    if (!S.dirty || !isLive(S) || budget <= 0 || frame - S.born < 2) continue;
     const m0 = performance.now();
     writes.push(measure(S));
     budget -= performance.now() - m0;
   }
   writes.forEach((w) => w());
-  for (const S of all) if (!S.dirty && S.visible && S.root.isConnected) draw(S, t);
+  for (const S of all) if (!S.dirty && isLive(S)) draw(S, t);
 }
 
-/** Start the shimmer on one skeleton root (an element with class `ars`). Returns a function that stops it. */
-export function animateSkeleton(root: HTMLElement): () => void {
-  if (!isBrowser() || reducedMotion()) return () => {};
+/**
+ * Start the shimmer on one skeleton root (an element with class `ars`). Returns a function that stops it.
+ * It only shimmers while it is on screen, the quality allows it, and it fits under the global caps.
+ */
+export function animateSkeleton(root: HTMLElement, options: { quality?: AsciiQuality } = {}): () => void {
+  if (!isBrowser()) return () => {};
   const existing = byRoot.get(root);
   if (existing) return () => stop(existing);
-  const canvas = document.createElement('canvas');
-  canvas.setAttribute('aria-hidden', 'true');
-  root.appendChild(canvas);
-  const S: Sk = { root, canvas, ctx: canvas.getContext('2d')!, rows: [], dirty: true, visible: true, band: 0.45, opacity: 0.9, speed: 1800, ro: null, mw: -1, mh: -1, born: frame };
+  const S: Sk = {
+    root, quality: options.quality, canvas: null, ctx: null, rows: [], granted: false, dirty: true, visible: true,
+    band: 0.45, opacity: 0.9, speed: 1800, ro: null, mw: -1, mh: -1, area: 0, born: frame,
+  };
+  if (!all.size) {
+    document.addEventListener('visibilitychange', sync);
+    unsub = subscribeQuality(reallocate);
+  }
   if (typeof ResizeObserver !== 'undefined') {
     // fires once on observe too: only re-measure when the size really changed
     S.ro = new ResizeObserver(() => {
       const r = root.getBoundingClientRect();
-      if (r.width !== S.mw || r.height !== S.mh) S.dirty = true;
+      if (r.width === S.mw && r.height === S.mh) return;
+      S.mw = r.width; S.mh = r.height; S.area = r.width * r.height;
+      S.dirty = true;
+      reallocate();
     });
     S.ro.observe(root);
+  } else {
+    const r = root.getBoundingClientRect();
+    S.mw = r.width; S.mh = r.height; S.area = r.width * r.height;
   }
   if (!io && typeof IntersectionObserver !== 'undefined') {
     io = new IntersectionObserver((entries) => {
+      let changed = false;
       for (const e of entries) {
         const s = byRoot.get(e.target as HTMLElement);
-        if (!s) continue;
+        if (!s || s.visible === e.isIntersecting) continue;
         s.visible = e.isIntersecting;
-        if (!s.visible) s.ctx.clearRect(0, 0, s.canvas.width, s.canvas.height);
+        changed = true;
       }
+      if (changed) reallocate();
     });
   }
   io?.observe(root);
@@ -205,24 +304,32 @@ export function animateSkeleton(root: HTMLElement): () => void {
   // glyph widths depend on the font: re-rasterise once web fonts have loaded
   if (document.fonts && document.fonts.status !== 'loaded') document.fonts.ready.then(() => { S.dirty = true; });
   if (!t0) t0 = performance.now();
-  if (!raf) raf = requestAnimationFrame(tick);
+  if (!S.ro) reallocate(); // without ResizeObserver the size is already known
   return () => stop(S);
 }
 
 function stop(S: Sk) {
   if (!all.has(S)) return;
+  setGranted(S, false);
   all.delete(S);
   byRoot.delete(S.root);
   S.ro?.disconnect();
   io?.unobserve(S.root);
-  freeCanvas(S.canvas);
-  for (const R of S.rows) freeCanvas(R.img);
-  S.rows = [];
+  if (!all.size) {
+    // last one out: nothing observed, nothing listening, nothing scheduled
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    io?.disconnect();
+    io = null;
+    document.removeEventListener('visibilitychange', sync);
+    unsub?.();
+    unsub = null;
+  } else reallocate(); // a slot may have opened up for a skeleton that was waiting
 }
 
 /** Start the shimmer on every animated skeleton inside `scope` (for markup from `asciiSkeletonHTML`). */
-export function animateSkeletons(scope: ParentNode = document): () => void {
+export function animateSkeletons(scope: ParentNode = document, options: { quality?: AsciiQuality } = {}): () => void {
   if (!isBrowser()) return () => {};
-  const stops = Array.from(scope.querySelectorAll<HTMLElement>('[data-ars-animate]')).map(animateSkeleton);
+  const stops = Array.from(scope.querySelectorAll<HTMLElement>('[data-ars-animate]')).map((el) => animateSkeleton(el, options));
   return () => stops.forEach((s) => s());
 }

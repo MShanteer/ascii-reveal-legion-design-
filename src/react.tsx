@@ -16,6 +16,7 @@ import {
 import { createAsciiReveal, type AsciiRevealController, type Duration, type Origin, type RunOptions } from './core/engine';
 import type { Preset, PresetName } from './core/presets';
 import type { MascotDraw, MascotName } from './core/mascots';
+import type { AsciiQuality } from './core/quality';
 
 const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
@@ -72,6 +73,11 @@ export interface AsciiRevealProps extends Omit<HTMLAttributes<HTMLElement>, 'chi
   lazy?: boolean;
   /** Finish instantly instead of stuttering on slow devices. Default true. */
   fallback?: boolean;
+  /**
+   * Performance guardrail for this component; overrides the global `setAsciiQuality`. `auto` (default) animates,
+   * except on low-end devices (`lite`: one short fade, mascots drawn once) and with reduced motion (`off`: content appears at once).
+   */
+  quality?: AsciiQuality;
   /** Called after the mount reveal or a loading reveal finishes. */
   onRevealComplete?: () => void;
 }
@@ -97,6 +103,7 @@ export const AsciiReveal = forwardRef<AsciiRevealHandle, AsciiRevealProps>(funct
     mascot = null,
     lazy = true,
     fallback = true,
+    quality,
     onRevealComplete,
     style,
     children,
@@ -119,7 +126,7 @@ export const AsciiReveal = forwardRef<AsciiRevealHandle, AsciiRevealProps>(funct
     const root = rootRef.current;
     const overlay = overlayRef.current;
     if (!root || !overlay) return;
-    const c = createAsciiReveal(root, { overlay, preset, speed, duration, origin, selector, mascot, lazy, fallback });
+    const c = createAsciiReveal(root, { overlay, preset, speed, duration, origin, selector, mascot, lazy, fallback, quality });
     ctrl.current = c;
     // measure with the content visible; nothing paints before the reveal hides it again
     root.removeAttribute('data-ar-pending');
@@ -140,8 +147,8 @@ export const AsciiReveal = forwardRef<AsciiRevealHandle, AsciiRevealProps>(funct
   }, []);
 
   useEffect(() => {
-    ctrl.current?.update({ preset, speed, duration, origin, selector, mascot, lazy, fallback });
-  }, [preset, speed, duration, origin, selector, mascot, lazy, fallback]);
+    ctrl.current?.update({ preset, speed, duration, origin, selector, mascot, lazy, fallback, quality });
+  }, [preset, speed, duration, origin, selector, mascot, lazy, fallback, quality]);
 
   useEffect(() => {
     const c = ctrl.current;

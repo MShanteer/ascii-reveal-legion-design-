@@ -1,6 +1,7 @@
 import { resolvePreset, type Preset, type PresetName } from './presets';
-import { clamp, dpr as getDpr, ease, easeIO, freeCanvas, hash, isBrowser, parseColor, reducedMotion } from './util';
+import { clamp, dpr as getDpr, ease, easeIO, freeCanvas, hash, isBrowser, parseColor } from './util';
 import { imageMascot, mascots, type MascotDraw, type MascotName } from './mascots';
+import { resolveQuality, type AsciiQuality } from './quality';
 
 /* ------------------------------------------------------------------ */
 /* Public types                                                        */
@@ -41,6 +42,11 @@ export interface AsciiRevealOptions {
   lazy?: boolean;
   /** If the device can't keep up (frames over ~45 ms), finish instantly instead of stuttering. Default true. */
   fallback?: boolean;
+  /**
+   * Performance guardrail for this reveal; overrides the global `setAsciiQuality`. `auto` (default) animates, except on
+   * low-end devices (`lite`: one short fade, no mascot loop) and with reduced motion (`off`: content appears at once).
+   */
+  quality?: AsciiQuality;
 }
 
 export interface RunOptions {
@@ -188,6 +194,8 @@ interface Run {
 
 interface Loop {
   render(now: number): boolean; // return false to stop
+  /** Off screen: the loop draws nothing, and the frame loop sleeps until it is visible again. */
+  paused?: boolean;
 }
 
 const runs = new Set<Run>();
@@ -257,7 +265,21 @@ function tick() {
     loops.clear();
     if (typeof console !== 'undefined') console.error('[ascii-reveal]', err);
   }
-  if (!runs.size && !loops.size) {
+  if (!runs.size && !hasLiveLoop()) {
+    // idle: nothing animating, or only loops that are off screen. No frame stays scheduled.
+    cancelAnimationFrame(raf);
+    raf = 0;
+  }
+}
+
+function hasLiveLoop() {
+  for (const loop of loops) if (!loop.paused) return true;
+  return false;
+}
+
+/** Cancel the frame loop if nothing needs it (after a controller is destroyed). */
+function sleepIfIdle() {
+  if (raf && !runs.size && !hasLiveLoop()) {
     cancelAnimationFrame(raf);
     raf = 0;
   }
@@ -894,7 +916,8 @@ class Controller implements AsciiRevealController {
   ownOverlay: boolean;
   hidden = new Map<Element, Set<string>>();
   lastRects: { x: number; y: number; w: number; h: number }[] = [];
-  shimmerLoop: (Loop & { stopAt: number; canvas: HTMLCanvasElement }) | null = null;
+  shimmerLoop: (Loop & { stopAt: number; canvas: HTMLCanvasElement; still?: boolean; free?: () => void }) | null = null;
+  private shimmerIO: IntersectionObserver | null = null;
   seed = (Math.random() * 1e6) | 0;
   n = 0;
   destroyed = false;
@@ -1083,7 +1106,23 @@ class Controller implements AsciiRevealController {
   private async run(dir: 1 | -1, o: RunOptions = {}): Promise<void> {
     if (!isBrowser()) return;
     const scope = o.within || this.root;
-    if (dir < 0 && (o.instant || reducedMotion() || isDegraded())) {
+    const quality = resolveQuality(this.opts.quality);
+    if (dir > 0 && quality !== 'full') {
+      // lite / off (low-end device, reduced motion, or asked for): no decode, nothing measured and no frame loop.
+      // `lite` shows a single 220 ms fade; `off` shows the content at once.
+      for (const t of this.collectLite(scope)) {
+        const prev = owner.get(t.key);
+        if (prev) {
+          prev.byKey.get(t.key)?.dispose();
+          release(t.holdEl, t.holdName);
+          owner.delete(t.key);
+        }
+      }
+      this.clearHidden(scope);
+      if (quality === 'lite' && (scope as HTMLElement).animate) (scope as HTMLElement).animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
+      return;
+    }
+    if (dir < 0 && (o.instant || quality !== 'full' || isDegraded())) {
       this.lastRects = [];
       for (const t of this.collectLite(scope)) {
         const prev = owner.get(t.key);
@@ -1123,8 +1162,8 @@ class Controller implements AsciiRevealController {
     }
     if (dir < 0) this.lastRects = targets.filter((t) => t.rect).map((t) => t.rect!);
 
-    if (dir > 0 && (reducedMotion() || isDegraded())) {
-      // short fade instead of the decode: reduced motion, or a device that couldn't keep up
+    if (dir > 0 && isDegraded()) {
+      // short fade instead of the decode: a device that couldn't keep up
       for (const t of targets) {
         const prev = owner.get(t.key);
         if (prev) {
@@ -1192,7 +1231,7 @@ class Controller implements AsciiRevealController {
   }
 
   reveal(o: RunOptions = {}) {
-    if (this.opts.lazy !== false && !o.within && isBrowser() && !reducedMotion() && 'IntersectionObserver' in window) return this.lazyReveal(o);
+    if (this.opts.lazy !== false && !o.within && isBrowser() && resolveQuality(this.opts.quality) === 'full' && 'IntersectionObserver' in window) return this.lazyReveal(o);
     return this.run(1, o);
   }
 
@@ -1233,18 +1272,53 @@ class Controller implements AsciiRevealController {
     return this.run(-1, o);
   }
 
+  /** Remove a shimmer or mascot loop: its canvas, and the observer that pauses it off screen. */
+  private dropLoop(loop: NonNullable<Controller['shimmerLoop']>) {
+    loops.delete(loop);
+    freeCanvas(loop.canvas);
+    loop.free?.();
+    if (this.shimmerLoop === loop) {
+      this.shimmerLoop = null;
+      this.shimmerIO?.disconnect();
+      this.shimmerIO = null;
+    }
+  }
+
+  /** Pause a loop while the element is off screen, and wake the frame loop when it comes back. */
+  private watchLoop(loop: NonNullable<Controller['shimmerLoop']>) {
+    if (typeof IntersectionObserver === 'undefined') return;
+    this.shimmerIO?.disconnect();
+    const io = new IntersectionObserver((entries) => {
+      const e = entries[entries.length - 1];
+      if (!e || loop.paused === !e.isIntersecting) return;
+      loop.paused = !e.isIntersecting;
+      if (!loop.paused) kick();
+    });
+    io.observe(this.root);
+    this.shimmerIO = io;
+  }
+
   shimmer(on: boolean) {
     if (!isBrowser()) return;
     if (!on) {
-      if (this.shimmerLoop && this.shimmerLoop.stopAt === Infinity) this.shimmerLoop.stopAt = performance.now();
+      const loop = this.shimmerLoop;
+      if (loop && loop.stopAt === Infinity) {
+        // a still frame, or a loop nobody can see, has nothing to fade out
+        if (loop.still || loop.paused) {
+          this.dropLoop(loop);
+          sleepIfIdle();
+        } else loop.stopAt = performance.now();
+      }
       return;
     }
     if (this.shimmerLoop) {
       this.shimmerLoop.stopAt = Infinity;
       return;
     }
-    if (reducedMotion()) return;
+    const quality = resolveQuality(this.opts.quality);
     const draw = this.mascotDraw();
+    // lite / off (low-end device, reduced motion): no frame loop. A mascot is drawn once as a still; the plain shimmer is skipped.
+    if (quality !== 'full' && !draw) return;
     // a skeleton already shows the loading state; the plain shimmer would only add noise on top of it
     if (!draw && this.root.querySelector('[data-ascii-skeleton]')) return;
     const dp = getDpr();
@@ -1256,9 +1330,17 @@ class Controller implements AsciiRevealController {
     this.overlay.appendChild(canvas);
     const ctx = canvas.getContext('2d')!;
     if (draw) {
-      const loop = this.mascotLoop(canvas, ctx, draw, dp, orc);
+      const still = quality !== 'full';
+      const loop = this.mascotLoop(canvas, ctx, draw, dp, orc, still);
       this.shimmerLoop = loop;
+      if (still) {
+        // one frame, drawn now. Nothing is scheduled, so it costs nothing while it waits for the data.
+        loop.render(performance.now());
+        loop.free();
+        return;
+      }
       loops.add(loop);
+      this.watchLoop(loop);
       kick();
       return;
     }
@@ -1273,16 +1355,16 @@ class Controller implements AsciiRevealController {
     const ch = 11 * dp, cw = ch * 0.62;
     const t0 = performance.now();
     let lastDraw = -Infinity;
-    const loop = {
+    const loop: NonNullable<Controller['shimmerLoop']> = {
       stopAt: Infinity,
       canvas,
       render: (now: number) => {
+        if (loop.paused) return true;
         const lt = now - t0;
         const fin = clamp(lt / 260);
         const fout = loop.stopAt === Infinity ? 1 : 1 - clamp((now - loop.stopAt) / 260);
         if (fout <= 0) {
-          freeCanvas(canvas);
-          if (this.shimmerLoop === loop) this.shimmerLoop = null;
+          this.dropLoop(loop);
           return false;
         }
         if (lt - lastDraw < 33 && fin >= 1 && fout >= 1) return true; // ~30 fps is plenty for a shimmer
@@ -1311,6 +1393,7 @@ class Controller implements AsciiRevealController {
     };
     this.shimmerLoop = loop;
     loops.add(loop);
+    this.watchLoop(loop);
     kick();
   }
 
@@ -1325,7 +1408,7 @@ class Controller implements AsciiRevealController {
   }
 
   /** Animated mascot rendered through the glyph grid where the hidden content was. */
-  private mascotLoop(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, draw: MascotDraw, dp: number, orc: DOMRect) {
+  private mascotLoop(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, draw: MascotDraw, dp: number, orc: DOMRect, still = false) {
     // area: the union of what was hidden, padded, at least 170px tall, kept inside the element
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const r of this.lastRects) { x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y); x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h); }
@@ -1348,19 +1431,21 @@ class Controller implements AsciiRevealController {
     off.width = OW; off.height = OH;
     const o = off.getContext('2d', { willReadFrequently: true })!;
     const sy = OH / rows;
-    const t0 = performance.now();
+    // a still frame shows the mascot settled (fully drawn in, 2 s into its animation)
+    const t0 = performance.now() - (still ? 2000 : 0);
     let lastDraw = -Infinity;
-    const loop = {
+    const loop: NonNullable<Controller['shimmerLoop']> & { free: () => void } = {
       stopAt: Infinity,
       canvas,
+      still,
+      free: () => freeCanvas(off),
       render: (now: number) => {
+        if (loop.paused) return true;
         const lt = now - t0;
         const fin = clamp(lt / 320);
         const gone = loop.stopAt === Infinity ? 0 : clamp((now - loop.stopAt) / 450);
         if (gone >= 1) {
-          freeCanvas(canvas);
-          freeCanvas(off);
-          if (this.shimmerLoop === loop) this.shimmerLoop = null;
+          this.dropLoop(loop);
           return false;
         }
         if (lt - lastDraw < 33) return true; // mascots animate at ~30 fps
@@ -1426,13 +1511,13 @@ class Controller implements AsciiRevealController {
     this.activeRuns = 0;
     for (const [el, names] of this.hidden) for (const n of names) release(el, n);
     this.hidden.clear();
-    if (this.shimmerLoop) {
-      loops.delete(this.shimmerLoop);
-      freeCanvas(this.shimmerLoop.canvas);
-      this.shimmerLoop = null;
-    }
+    if (this.shimmerLoop) this.dropLoop(this.shimmerLoop);
+    this.shimmerIO?.disconnect();
+    this.shimmerIO = null;
     if (this.ownOverlay) this.overlay.remove();
     else this.overlay.replaceChildren();
+    // the last controller to go leaves no frame scheduled
+    sleepIfIdle();
   }
 }
 

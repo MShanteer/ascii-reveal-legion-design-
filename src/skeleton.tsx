@@ -1,6 +1,7 @@
 import { createElement, useEffect, useMemo, useRef, type CSSProperties, type ElementType, type HTMLAttributes } from 'react';
 import { BLOCK_LEN, LINE_LEN, SKELETON_CSS, SKELETON_WIDTHS, skeletonBase, type SkeletonVariant } from './core/skeleton';
 import { animateSkeleton } from './core/skeleton-anim';
+import type { AsciiQuality } from './core/quality';
 
 export interface AsciiSkeletonProps extends Omit<HTMLAttributes<HTMLElement>, 'children'> {
   /** Glyph style: `dither` (shaded blocks, default), `scan` (decode glyphs), `braille` (fine dots), `terminal` (0/1 in your accent color). */
@@ -20,6 +21,12 @@ export interface AsciiSkeletonProps extends Omit<HTMLAttributes<HTMLElement>, 'c
   seed?: number;
   /** Shimmer. Default true. Set false for long lists: a still glyph pattern paints as fast as a gray box. */
   animate?: boolean;
+  /**
+   * Performance guardrail for this skeleton; overrides the global `setAsciiQuality`. `auto` (default) shimmers, except on
+   * low-end devices and with reduced motion, where the still pattern stays. Even when allowed, only a capped number of
+   * on-screen skeletons shimmer at once (`setAsciiLimits`).
+   */
+  quality?: AsciiQuality;
   /** Element to render as. Default `span`. */
   as?: ElementType;
 }
@@ -38,11 +45,11 @@ const css = (v: string | number | undefined) => (typeof v === 'number' ? `${v}px
  * </AsciiReveal>
  * ```
  */
-export function AsciiSkeleton({ variant = 'dither', lines = 3, widths = SKELETON_WIDTHS, rows, width, height, circle, seed = 1, animate = true, as = 'span', style, className, ...rest }: AsciiSkeletonProps) {
+export function AsciiSkeleton({ variant = 'dither', lines = 3, widths = SKELETON_WIDTHS, rows, width, height, circle, seed = 1, animate = true, quality, as = 'span', style, className, ...rest }: AsciiSkeletonProps) {
   const ref = useRef<HTMLElement>(null);
   const wkey = widths.join('|');
   // the markup paints as a still pattern; the shimmer starts once this runs in the browser
-  useEffect(() => (animate && ref.current ? animateSkeleton(ref.current) : undefined), [animate, variant, lines, rows, seed, width, height, circle, wkey]);
+  useEffect(() => (animate && ref.current ? animateSkeleton(ref.current, { quality }) : undefined), [animate, quality, variant, lines, rows, seed, width, height, circle, wkey]);
   // glyph text depends only on these props: don't regenerate it when the parent re-renders
   const body = useMemo(() => {
     const group = (i: number, n: number, cls: string, st: CSSProperties) =>
