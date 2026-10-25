@@ -1,0 +1,114 @@
+/* The Legion page of the demo. Tokens come from ascii-reveal-legion/legion.css (--legion-*, --ascii-*). Dark only. */
+:root {
+  --line: rgba(245, 244, 240, 0.1);
+  --line-strong: rgba(245, 244, 240, 0.2);
+  --panel: #101012;
+  --panel-hi: #151518;
+  --gold-line: rgba(232, 193, 106, 0.38);
+  --gold-wash: rgba(232, 193, 106, 0.08);
+  --ok: #8fd19e;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--legion-bg); color: var(--legion-text); }
+body { font: 14px/1.6 var(--ascii-font); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+code, pre, button, input { font-family: inherit; }
+p { margin: 0; }
+a { color: var(--legion-gold); text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--legion-gold); outline-offset: 2px; }
+.muted { color: var(--legion-muted); }
+.small { font-size: 12px; }
+
+.shell { max-width: 1120px; margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-right)) 64px max(16px, env(safe-area-inset-left)); }
+
+/* top bar */
+.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 24px; padding: 18px 0; border-bottom: 1px solid var(--line); }
+.brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 500; letter-spacing: -0.01em; }
+.top nav { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; }
+.top nav a { color: var(--legion-muted); padding: 6px 0; }
+.top nav a:hover { color: var(--legion-gold); text-decoration: none; }
+
+/* hero */
+.hero { padding: 56px 0 44px; display: flex; align-items: center; justify-content: space-between; gap: 32px; }
+.hero-mark { flex: none; display: none; opacity: 0.9; }
+@media (min-width: 900px) { .hero-mark { display: block; margin-right: 40px; } }
+.kicker { color: var(--legion-gold); font-size: 12px; letter-spacing: 0.04em; margin-bottom: 14px; }
+.hero h1 { margin: 0 0 16px; font-size: clamp(27px, 6.2vw, 52px); line-height: 1.12; font-weight: 500; letter-spacing: -0.03em; max-width: 18ch; }
+.lead { color: var(--legion-muted); font-size: clamp(14px, 2.4vw, 16px); max-width: 60ch; }
+
+/* sections */
+.sec { padding: 40px 0 8px; border-top: 1px solid var(--line); }
+.sec-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+.idx { color: var(--legion-gold); font-size: 12px; }
+.sec h2 { margin: 0; font-size: 20px; font-weight: 500; letter-spacing: -0.02em; }
+.lede { color: var(--legion-muted); max-width: 72ch; margin-bottom: 20px; }
+.lede code, .muted code { color: var(--legion-text); background: var(--panel-hi); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; font-size: 12.5px; }
+
+.grid { display: grid; gap: 14px; margin-bottom: 28px; }
+.grid.two, .grid.three { grid-template-columns: 1fr; }
+@media (min-width: 760px) { .grid.two { grid-template-columns: 1fr 1fr; } .grid.three { grid-template-columns: repeat(3, 1fr); } }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+.panel-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.label { margin: 0 0 12px; font-size: 12px; font-weight: 400; color: var(--legion-muted); letter-spacing: 0.02em; }
+.stage { padding: 14px 0; font-size: 15px; border-bottom: 1px dashed var(--line); margin-bottom: 12px; }
+
+/* buttons */
+.btn { min-height: 40px; padding: 8px 14px; color: var(--legion-text); background: transparent; border: 1px solid var(--gold-line); border-radius: 6px; font-size: 13px; cursor: pointer; transition: border-color 0.15s, background 0.15s, color 0.15s; }
+.btn.small { min-height: 32px; padding: 4px 10px; font-size: 12px; }
+.btn:hover:not(:disabled) { border-color: var(--legion-gold); background: var(--gold-wash); color: var(--legion-gold-pale); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.link { background: none; border: 0; color: var(--legion-gold); cursor: pointer; padding: 6px 0 6px 12px; font-size: 12px; }
+.link:hover { text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 759px) { .btn { min-height: 44px; } .btn.small { min-height: 44px; padding: 4px 14px; } }
+
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 14px; }
+.hint { color: var(--legion-muted); font-size: 12px; }
+.hint b { color: var(--legion-gold); font-weight: 500; }
+.seg { display: inline-flex; border: 1px solid var(--gold-line); border-radius: 6px; overflow: hidden; }
+.seg-btn { min-height: 40px; min-width: 56px; padding: 6px 14px; background: transparent; color: var(--legion-muted); border: 0; border-right: 1px solid var(--gold-line); font-size: 13px; cursor: pointer; }
+.seg-btn:last-child { border-right: 0; }
+.seg-btn:hover { color: var(--legion-text); background: var(--gold-wash); }
+.seg-btn.on { background: var(--legion-gold); color: #0a0a0b; }
+@media (max-width: 759px) { .seg-btn { min-height: 44px; flex: 1; } .seg { width: 100%; } }
+
+/* chat */
+.chat { display: grid; gap: 10px; margin-bottom: 14px; }
+.msg { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); min-height: 44px; }
+.msg.me { background: var(--panel-hi); justify-self: end; max-width: 92%; }
+.msg.bot { background: transparent; border-color: var(--gold-line); }
+
+/* crm cards */
+.lead-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: 28px; }
+@media (min-width: 760px) { .lead-grid { grid-template-columns: repeat(3, 1fr); } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 14px; min-height: 212px; min-width: 0; }
+.card header { display: flex; gap: 12px; align-items: center; }
+.card h3 { margin: 0; font-size: 15px; font-weight: 500; }
+.meta { color: var(--legion-muted); font-size: 12px; }
+.avatar { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--gold-line); color: var(--legion-gold); font-size: 12px; }
+.card dl { display: grid; grid-template-columns: repeat(3, auto); justify-content: space-between; gap: 8px; margin: 0; }
+.card dt { color: var(--legion-muted); font-size: 11px; }
+.card dd { margin: 0; font-size: 13px; }
+.card .btn { margin-top: auto; align-self: flex-start; }
+
+/* mascots */
+.mascot-box { min-height: 200px; border: 1px dashed var(--line-strong); border-radius: 8px; padding: 12px; margin-top: 6px; }
+.mascot-done { display: grid; align-content: center; gap: 6px; min-height: 176px; }
+.ok { color: var(--ok); }
+
+/* guardrails */
+.skel-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, 1fr); margin: 10px 0 12px; }
+@media (min-width: 760px) { .skel-grid { grid-template-columns: repeat(4, 1fr); } }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow: hidden; }
+.meter { color: var(--legion-muted); font-size: 12px; margin-bottom: 28px; display: flex; flex-wrap: wrap; align-items: center; }
+.meter b { color: var(--legion-gold); font-weight: 500; margin-right: 6px; }
+
+/* theme */
+.swatches { display: grid; gap: 8px 24px; grid-template-columns: 1fr; margin-bottom: 18px; }
+@media (min-width: 760px) { .swatches { grid-template-columns: 1fr 1fr; } }
+.sw { display: grid; grid-template-columns: 22px auto 1fr; align-items: center; gap: 10px; font-size: 12.5px; }
+.sw .chip { width: 22px; height: 22px; border-radius: 5px; border: 1px solid var(--line-strong); }
+pre { margin: 0; overflow: auto; font-size: 12.5px; line-height: 1.6; color: var(--legion-text); }
+pre code { white-space: pre; }
+
+.foot { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--legion-muted); font-size: 12px; max-width: 80ch; }

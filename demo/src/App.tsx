@@ -14,7 +14,7 @@ import {
     type Origin,
     type PresetName,
     type SkeletonVariant,
-} from "ascii-reveal";
+} from "ascii-reveal-legion";
 import { drawArt, type ArtName } from "./art";
 import { AsciiBackdrop } from "./Backdrop";
 import { SpookyBackdrop } from "./SpookyBackdrop";
@@ -101,19 +101,19 @@ function Photo({
 }
 
 // GitHub repo. Drives the install command and docs links on the page.
-const REPO = "quanhoangindex/ascii-reveal";
+const REPO = "MShanteer/ascii-reveal-legion-design-";
 const INSTALL = `npm i github:${REPO}`;
 
 const STEPS: { title: string; body: string; code: string }[] = [
     {
         title: "Install",
         body: "Add the package from npm, or straight from GitHub. React 17 or newer is all it needs.",
-        code: `npm i ascii-reveal\n\n# or straight from GitHub\n${INSTALL}`,
+        code: `npm i ascii-reveal-legion\n\n# or straight from GitHub\n${INSTALL}`,
     },
     {
         title: "Wrap your content",
         body: "Everything inside decodes into place when it mounts: text, images, canvases and video.",
-        code: `import { AsciiReveal } from 'ascii-reveal';\n\n<AsciiReveal preset="decode">\n  <YourPage />\n</AsciiReveal>`,
+        code: `import { AsciiReveal } from 'ascii-reveal-legion';\n\n<AsciiReveal preset="decode">\n  <YourPage />\n</AsciiReveal>`,
     },
     {
         title: "Mark the pieces",
@@ -123,7 +123,7 @@ const STEPS: { title: string; body: string; code: string }[] = [
     {
         title: "Show loading states",
         body: "An ASCII skeleton paints instantly while data loads, then the real content decodes in. Use AsciiSkeleton on its own if you only want the placeholder.",
-        code: `import { AsciiReveal, AsciiSkeleton } from 'ascii-reveal';\n\n<AsciiReveal loading={!data}>\n  {data\n    ? <Stats data={data} />\n    : <AsciiSkeleton variant="dither" />}\n</AsciiReveal>`,
+        code: `import { AsciiReveal, AsciiSkeleton } from 'ascii-reveal-legion';\n\n<AsciiReveal loading={!data}>\n  {data\n    ? <Stats data={data} />\n    : <AsciiSkeleton variant="dither" />}\n</AsciiReveal>`,
     },
 ];
 
@@ -1132,7 +1132,7 @@ export default function App() {
             setTimeout(() => setCopied("Copy"), 1600);
         };
         try {
-            navigator.clipboard.writeText("npm i ascii-reveal").then(
+            navigator.clipboard.writeText("npm i ascii-reveal-legion").then(
                 () => done(true),
                 () => done(false),
             );
@@ -1182,6 +1182,9 @@ export default function App() {
                         </div>
                         <div className="nav-right">
                             <span className="badge">v0.3 · open source</span>
+                            <a className="gh-pill" href="./legion.html" data-ascii="fade">
+                                <span>Legion design</span>
+                            </a>
                             <a
                                 className="gh-pill"
                                 href={`https://github.com/${REPO}`}

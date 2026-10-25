@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { mascots } from 'ascii-reveal';
+import { mascots } from 'ascii-reveal-legion';
 
 /**
  * Haunted background for the mascots section: a spider drops on its thread and climbs back up,

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { AsciiReveal, AsciiSkeleton, type MascotName } from "ascii-reveal";
+import { AsciiReveal, AsciiSkeleton, type MascotName } from "ascii-reveal-legion";
 import { drawArt } from "./art";
 import "./styles.css";
 import "./readme-cards.css";

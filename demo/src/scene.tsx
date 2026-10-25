@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { AsciiReveal, AsciiSkeleton, type SkeletonVariant } from "ascii-reveal";
+import { AsciiReveal, AsciiSkeleton, type SkeletonVariant } from "ascii-reveal-legion";
 import "./styles.css";
 import "./scene.css";
 
