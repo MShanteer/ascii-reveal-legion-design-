@@ -7,5 +7,7 @@ export type { MascotName, MascotDraw } from './mascots';
 export { asciiSkeletonHTML, glyphRow, SKELETON_CSS, SKELETON_VARIANTS } from './skeleton';
 export type { SkeletonSpec, SkeletonVariant } from './skeleton';
 export { animateSkeleton, animateSkeletons } from './skeleton-anim';
+export { asciiLoaderHTML, animateLoader, animateLoaders, LOADER_CSS } from './loader';
+export type { LoaderSpec, LoaderVariant } from './loader';
 export { setAsciiQuality, getAsciiQuality, setAsciiLimits, getAsciiLimits, resolveQuality, isLowEndDevice, subscribeQuality } from './quality';
 export type { AsciiQuality, ResolvedQuality, AsciiLimits } from './quality';
