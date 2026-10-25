@@ -1,4 +1,6 @@
-# ascii-reveal
+# ascii-reveal-legion
+
+> The Legion design system's loading and reveal engine. A fork of [ascii-reveal](https://github.com/quanhoangindex/ascii-reveal) by Quan Hoang (MIT): gold-on-black terminal skeletons, loaders and reveals, with performance guardrails built in. Jump to [Legion design](#legion-design).
 
 <a href="https://quanhoangindex.github.io/ascii-reveal/">
   <picture>
@@ -7,7 +9,7 @@
   </picture>
 </a>
 
-<sub>Recorded from the real component: <code>&lt;AsciiSkeleton&gt;</code> while loading, then <code>&lt;AsciiReveal&gt;</code> decodes the data in. <b><a href="https://quanhoangindex.github.io/ascii-reveal/">Try the live demo →</a></b></sub>
+<sub>Recorded from the real component: <code>&lt;AsciiSkeleton&gt;</code> while loading, then <code>&lt;AsciiReveal&gt;</code> decodes the data in. <b><a href="https://quanhoangindex.github.io/ascii-reveal/">Try the upstream live demo →</a></b></sub>
 
 ```tsx
 <AsciiReveal loading={!data}>
@@ -24,26 +26,135 @@ A loading effect for React. Text, images and whole cards decode into place throu
 - **Skeleton-fast.** `<AsciiSkeleton>` is plain HTML and CSS: it paints on the first frame, renders on the server and needs no JavaScript. Data becomes readable about 400 ms after it arrives.
 - **Light.** One canvas per reveal, repainted at ~30 fps, one animation loop shared by every instance. Slow devices get a short fade instead. About 15 KB gzipped with all mascots and the skeleton, no dependencies.
 
+## Legion design
+
+This fork is the loading and reveal engine of the Legion design system: gold on black, terminal-flavoured, for the Legion CRM and Moose Code (Next.js 16, React 19). Everything in the upstream README below still works unchanged; this section is what the fork adds.
+
+<picture>
+  <img src="assets/readme/legion-reveal-1440.png" alt="Three lead cards decoding into place in gold on a near-black page" width="100%">
+</picture>
+
+<sub>Skeleton, then reveal, on the demo's Legion page (`npm run demo`, then open `legion.html`). Mobile: <a href="assets/readme/legion-skeleton-390.png">skeletons at 390 px</a>, <a href="assets/readme/legion-mascots-1440.png">the three mascots</a>.</sub>
+
+### Setup
+
+```tsx
+// app/layout.tsx: once. Dark only. Sets every variable the engine reads.
+import 'ascii-reveal-legion/legion.css';
+```
+
+```tsx
+// any client component ('use client' is already in the package)
+import { AsciiReveal, AsciiSkeleton, AsciiLoader } from 'ascii-reveal-legion';
+
+<AsciiReveal preset="legion" loading={!leads}>
+  {leads ? <LeadTable rows={leads} /> : <AsciiSkeleton variant="legion" lines={4} />}
+</AsciiReveal>
+
+{isLoading && <AsciiLoader />}                          {/* ▌ loading   */}
+{isThinking && <AsciiLoader variant="thinking" />}      {/* ▌ thinking ... (Moose Code) */}
+<AsciiReveal loading={isLoading} mascot="antler">…</AsciiReveal>
+```
+
+Server components can import `asciiSkeletonHTML` and `asciiLoaderHTML` from `ascii-reveal-legion/core`, which has no React in it and no `'use client'`.
+
+### The rules this engine keeps
+
+- **Nothing animates at idle.** When nothing is loading there are no timers and no `requestAnimationFrame` callbacks scheduled, anywhere. The test suite counts them (see below).
+- **Motion is tied to a live loading state.** Skeletons shimmer while they are on screen, loaders decode once when they appear, mascots play while `loading` is true. Nothing loops decoratively.
+- **Reduced motion shows the end state.** Skeletons and loaders are still, mascots are one still frame, a reveal shows the content at once.
+- **Dark only, tokens not hex.** Colors come from `--ascii-*` variables, defined in `legion.css`.
+- **Cheap on low-end laptops.** See the guardrails below.
+
+### Presets, variants, mascots, loader
+
+| What | Name | Look |
+| --- | --- | --- |
+| Reveal preset | `legion` | A block cursor (`▌`) leads each character, which condenses through `. : - = + * # ▒ █`, flickers through hex and punctuation, then locks to its real value. Glyphs, surface dots and image glyphs use `--ascii-accent` (gold). Tick 52 ms. |
+| Skeleton variant | `legion` | Dither shading with scan dots, in the muted color. A band of dense blocks and operators sweeps through it in `--ascii-accent`. Change the variable and the band follows. |
+| Mascot | `antler` | The brand glyph redrawn from its path data. Grows up from its base once, then holds still while a pale band drifts up it. Color follows `--ascii-mascot`. |
+| Mascot | `thinking` | Three dots with one slow swell travelling through them (about 4 s a pass). Small and calm, for "the model is thinking". |
+| Mascot | `legion-mark` | The brand SVG itself, scanned in once from the top. `legionMark(svgMarkup)` makes the same thing from any SVG markup. |
+| Component | `AsciiLoader` | One line that replaces a spinner: `▌ loading`. The label decodes once (about 0.4 s); after that no JavaScript runs. `variant="thinking"` adds three dots that swell in turn. A polite `role="status"` for screen readers. |
+
+`AsciiLoader` props: `label`, `variant` (`'cursor' | 'thinking'`), `blink`, `quality`, `as`. The cursor blink is a CSS opacity animation, so the browser runs it off the main thread, and it is off with reduced motion. Without React: `el.innerHTML = asciiLoaderHTML({ label: 'syncing' })`, then `animateLoaders(el)`. A server-rendered loader blinks (CSS only) until the page hydrates; once JavaScript runs, a low-end device or reduced motion makes it still.
+
+### Performance guardrails
+
+```ts
+import { setAsciiQuality, setAsciiLimits } from 'ascii-reveal-legion';
+
+setAsciiQuality('auto');   // 'auto' (default) | 'full' | 'lite' | 'off'
+setAsciiLimits({ maxAnimatedSkeletons: 6, maxAnimatedArea: 800_000 });   // the defaults
+```
+
+| Quality | Skeletons | Loaders | Mascots | Reveal |
+| --- | --- | --- | --- | --- |
+| `full` | shimmer (within the caps) | decode, then blink | animate | decode |
+| `lite` | still pattern | still | one still frame | one 220 ms fade |
+| `off` | still pattern | still | one still frame | content appears at once |
+| `auto` | `full`, but `lite` on low-end devices (4 or fewer logical cores, or 4 GB or less of memory), and `off` with `prefers-reduced-motion` | | | |
+
+- `prefers-reduced-motion` always wins, even over `full`. A 2-core laptop that you set to `full` does animate; that is the opt-in.
+- **Hard caps.** At most 6 skeletons shimmer at once (and at most 800 000 px² between them). The rest keep their still pattern, which paints just as fast. Only on-screen skeletons hold a slot, earlier ones first, so scrolling hands slots on. The first skeleton always fits the area cap, so one big hero skeleton is not stuck still. A skeleton's shimmer canvas only exists while it holds a slot.
+- **Off-screen means off.** Skeletons, loading shimmers and mascots stop drawing when they leave the viewport, and the frame loop goes to sleep instead of idling at 60 Hz. It wakes from an `IntersectionObserver` or `ResizeObserver` callback.
+- **Hidden tabs** cancel the frame loop.
+- **Without React**, keep the function that `animateSkeletons` / `animateLoaders` returns and call it before you remove the markup; React components do this for you. Do not call `animateSkeletons` on a subtree that contains React-rendered skeletons.
+- **Per component.** `quality` on `AsciiReveal`, `AsciiSkeleton` and `AsciiLoader` overrides the global setting for that one component (reduced motion still wins).
+- **Live.** `setAsciiQuality` and `setAsciiLimits` take effect on skeletons, loaders and playing mascots that are already on the page, and the reduced-motion preference is watched too.
+- The setting lives on `globalThis` under a `Symbol.for` key, so `ascii-reveal-legion`, `ascii-reveal-legion/core` and the CommonJS build share one value.
+- Note for the owner's own machine: `auto` treats a 4-core laptop as low-end, so you will see still skeletons by default. Call `setAsciiQuality('full')` to see everything.
+
+#### The idle-CPU guarantee, and how it is tested
+
+When nothing is loading, nothing is scheduled. `test/guardrails.mjs`, `test/legion.mjs` and `test/hydrate.mjs` wrap `requestAnimationFrame`, `setTimeout` and `setInterval` in a real Chromium and assert that the count of pending callbacks is zero: on a fresh page, after a reveal finishes, right after `destroy()` or React unmount, with every skeleton and mascot off screen, in a hidden tab, with `lite` / `off` / reduced motion / a 2-core device, and after a loader's decode. The only continuous activity in the whole library is the CSS cursor blink on an `AsciiLoader`, and the skeleton and mascot loops while something is loading on screen.
+
+### Theming
+
+`legion.css` defines these on `:root` (and on `.ascii-legion` if you want them scoped):
+
+| Variable | Value | Used for |
+| --- | --- | --- |
+| `--ascii-accent` | `#e8c16a` | cursor, lit glyphs, the skeleton band, the loader cursor |
+| `--ascii-glyph` | `#a8a6a0` | scramble glyphs for presets that do not use the accent |
+| `--ascii-skeleton` | `#a8a6a0` | the still glyph pattern of a skeleton |
+| `--ascii-flash` | `#f6e6b8` | brief color as each character lands |
+| `--ascii-surface` | `#0a0a0b` | what transparent images sit on |
+| `--ascii-mascot` | `#e8c16a` | antler, thinking dots, other line-art mascots |
+| `--ascii-font` | your `--legion-font-mono`, `--font-mono` or `--font-geist-mono`, else the system mono stack | everything |
+
+It also defines `--legion-bg: #0a0a0b`, `--legion-text: #f5f4f0`, `--legion-muted: #a8a6a0`, `--legion-gold: #e8c16a` and `--legion-gold-pale: #f6e6b8`, and a `.ascii-legion` class that sets the surface and text colors and `color-scheme: dark`.
+
+### React 19 and Next.js 16
+
+- Peer range `^17 || ^18 || ^19`. The repo is developed and typechecked on React 19; the SSR and hydration tests also run on React 18.
+- `dist/index.js` and `dist/index.cjs` start with `"use client"`. The framework-free `ascii-reveal-legion/core` does not.
+- No `React.FC`, `defaultProps`, `propTypes`, `findDOMNode` or legacy render API (a test scans the source for them).
+- Server markup is deterministic: no `Math.random`, no ids, no dates. A test renders every skeleton variant and the loader with `react-dom/server` twice and compares the HTML; another server-renders a full document and hydrates it in Chromium under `StrictMode` and fails on any hydration warning or recoverable error. Server-rendered content is never hidden on hydration.
+- React 19 hoists the skeleton and loader `<style>` once per page. React 18 repeats it per instance; add `SKELETON_CSS` and `LOADER_CSS` from `ascii-reveal-legion/core` once and pass `css: false` to the HTML helpers if that matters.
+
+---
+
 ## Install
 
-From npm:
+From npm (once published):
 
 ```bash
-npm i ascii-reveal
+npm i ascii-reveal-legion
 ```
 
 Straight from GitHub (no npm publish needed):
 
 ```bash
-npm i github:quanhoangindex/ascii-reveal
+npm i github:MShanteer/ascii-reveal-legion-design-
 ```
 
-React 17 or newer is a peer dependency. The built files in `dist/` are committed, so the GitHub install works without a build step.
+React 17, 18 or 19 is a peer dependency. The built files in `dist/` are committed, so the GitHub install works without a build step.
 
 ## Quick start
 
 ```tsx
-import { AsciiReveal } from 'ascii-reveal';
+import { AsciiReveal } from 'ascii-reveal-legion';
 
 export function Page() {
   return (
@@ -84,7 +195,7 @@ Skeletons exist to paint instantly while data loads. `AsciiSkeleton` does exactl
 </picture>
 
 ```tsx
-import { AsciiSkeleton } from 'ascii-reveal';
+import { AsciiSkeleton } from 'ascii-reveal-legion';
 
 {data ? <Profile data={data} /> : <AsciiSkeleton lines={3} />}
 ```
@@ -97,7 +208,7 @@ import { AsciiSkeleton } from 'ascii-reveal';
 </picture>
 
 ```tsx
-import { AsciiReveal, AsciiSkeleton } from 'ascii-reveal';
+import { AsciiReveal, AsciiSkeleton } from 'ascii-reveal-legion';
 
 <AsciiReveal loading={!data}>
   {data ? <Profile data={data} /> : <AsciiSkeleton lines={3} />}
@@ -119,6 +230,7 @@ Pick a style with `variant`:
 | `scan` | Faint dots with a band of dense, scrambling glyphs. Matches the `decode` preset. |
 | `braille` | Fine braille dot texture; the band fills the dots in. |
 | `terminal` | Faint 0s and 1s, lit up in `--ascii-accent` as the band passes. |
+| `legion` | Dither shading with scan dots; the band is dense blocks and operators in `--ascii-accent`. |
 
 ```tsx
 <AsciiSkeleton variant="braille" lines={3} />
@@ -156,7 +268,7 @@ Content that arrives in server-rendered HTML is never hidden on hydration: it's 
 
 ### Loading mascots
 
-Swap the shimmer for an animated ASCII mascot while data loads. It dissolves as the new content decodes in.
+Swap the shimmer for an animated ASCII mascot while data loads. (Legion adds `antler`, `thinking` and `legion-mark`, see above.) It dissolves as the new content decodes in.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/mascot-dark.webp">
@@ -189,7 +301,7 @@ ref.current?.hide();
 
 | Prop | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `preset` | `'decode' \| 'dither' \| 'terminal' \| 'blueprint' \| Preset` | `'decode'` | Glyph set, timing and image style. |
+| `preset` | `'decode' \| 'dither' \| 'terminal' \| 'blueprint' \| 'legion' \| Preset` | `'decode'` | Glyph set, timing and image style. |
 | `duration` | `'fast' \| 'cinematic'` | `'fast'` | `fast` makes data readable in ~400 ms. `cinematic` is the slower, showier wave for hero sections. |
 | `speed` | `number` | `1` | Playback speed multiplier on top of `duration`. |
 | `origin` | `'center' \| 'top-left' \| 'pointer' \| { x, y }` | `'center'` | Where the wave starts. `{ x, y }` is in viewport pixels. |
@@ -200,7 +312,8 @@ ref.current?.hide();
 | `lazy` | `boolean` | `true` | Sections below the fold decode as they scroll into view instead of all at once. |
 | `revealOnHydrate` | `boolean` | `false` | Also animate content that was server-rendered. |
 | `fallback` | `boolean` | `true` | If frames take too long, finish the animation and use a short fade for the next 10 s. |
-| `mascot` | `'spider' \| 'ghost' \| 'pumpkin' \| 'bat' \| string \| MascotDraw` | – | Animated ASCII mascot instead of the shimmer while loading. |
+| `mascot` | `'spider' \| 'ghost' \| 'pumpkin' \| 'bat' \| 'antler' \| 'thinking' \| 'legion-mark' \| string \| MascotDraw` | – | Animated ASCII mascot instead of the shimmer while loading. |
+| `quality` | `'auto' \| 'full' \| 'lite' \| 'off'` | `'auto'` | Performance guardrail for this component; overrides `setAsciiQuality`. See [Performance guardrails](#performance-guardrails). |
 | `onRevealComplete` | `() => void` | – | Called when a reveal finishes. |
 | `as` | `ElementType` | `'div'` | Element used for the wrapper. |
 
@@ -234,7 +347,7 @@ The effect reads these CSS custom properties from the wrapper:
 ## Without React
 
 ```ts
-import { createAsciiReveal } from 'ascii-reveal/core';
+import { createAsciiReveal } from 'ascii-reveal-legion/core';
 
 const reveal = createAsciiReveal(document.querySelector('#app')!, { preset: 'dither' });
 reveal.reveal();
@@ -249,6 +362,7 @@ reveal.shimmer(true);
 - **dither**: block shading; images resolve in their own colors.
 - **terminal**: a cursor leads each character, binary-style scramble.
 - **blueprint**: line glyphs in the accent color.
+- **legion**: a block cursor leads each character; blocks and operators in the accent color. See [Legion design](#legion-design).
 
 Make your own by passing an object with the `Preset` shape (`ramp`, `scramble`, `mode`, `color`, `cells`, `tick`).
 
@@ -286,7 +400,9 @@ What changed:
 ```bash
 npm install
 npm run build        # builds dist/
-npm test             # browser smoke test (npx playwright install chromium first)
+npm run test:setup   # once: installs the React 18 copy used by the compat tests
+npm test             # unit, SSR, hydration and browser tests (npx playwright install chromium first,
+                     # or set CHROMIUM_PATH to a Chromium you already have)
 npm run demo         # runs the demo site (cd demo && npm install first)
 ```
 
@@ -294,4 +410,4 @@ See [CHANGELOG.md](CHANGELOG.md) for what changed between versions.
 
 ## License
 
-MIT
+MIT. Copyright (c) 2026 Quan Hoang for ascii-reveal; see [LICENSE](LICENSE) (unchanged) and [NOTICE](NOTICE) for what this fork changed.
