@@ -196,6 +196,8 @@ function setGranted(S: Sk, on: boolean) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return; // the browser refused another canvas: this one stays a still pattern
     canvas.setAttribute('aria-hidden', 'true');
+    // inline, so it is out of flow even when the page did not include SKELETON_CSS (asciiSkeletonHTML({ css: false }))
+    canvas.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none';
     S.root.appendChild(canvas);
     S.canvas = canvas;
     S.ctx = ctx;
@@ -221,7 +223,8 @@ function allocate() {
   let n = 0, area = 0;
   for (const S of all) {
     const q = S.quality ? resolveQuality(S.quality) : global;
-    const fits = n < maxAnimatedSkeletons && area + S.area <= maxAnimatedArea;
+    // the first skeleton always fits the area cap, so one big hero skeleton is not stuck still
+    const fits = n < maxAnimatedSkeletons && (n === 0 || area + S.area <= maxAnimatedArea);
     const grant = q === 'full' && S.visible && S.mw >= 0 && S.root.isConnected && fits;
     if (grant) { n++; area += S.area; }
     setGranted(S, grant);

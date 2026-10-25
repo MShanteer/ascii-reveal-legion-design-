@@ -233,6 +233,73 @@ const inkOn = (page, sel) => page.evaluate((sel) => {
   await ctx.close();
 }
 
+/* ---------------------------------------------------------------- found in review ---------------- */
+{
+  const { ctx, page } = await open();
+  // a quality drop reaches a mascot that is already playing: it settles to a still frame and the frame loop stops
+  const r = await page.evaluate(async () => {
+    const c = window.lib.createAsciiReveal(document.getElementById('app'), { mascot: 'thinking', lazy: false });
+    window.c = c;
+    await c.hide({ instant: true });
+    c.shimmer(true);
+    const before = window.__sched().raf;
+    window.lib.setAsciiQuality('off');
+    return { before, after: window.__sched().raf, canvases: document.querySelectorAll('#app .ar-overlay canvas').length };
+  });
+  check('quality drop mid-load: a playing mascot becomes a still frame and the rAF stops', r.before >= 1 && r.after === 0 && r.canvases === 1, JSON.stringify(r));
+  await page.evaluate(() => { window.c.destroy(); window.lib.setAsciiQuality('auto'); });
+
+  // lite with no mascot and no skeleton: the area is not left blank
+  const plain = await page.evaluate(async () => {
+    window.lib.setAsciiQuality('lite');
+    const c = window.lib.createAsciiReveal(document.getElementById('app'), { lazy: false });
+    await c.hide({ instant: true });
+    c.shimmer(true);
+    const cv = document.querySelector('#app .ar-overlay canvas');
+    const ink = cv ? cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data.some((v, i) => i % 4 === 3 && v > 0) : false;
+    const out = { ink, raf: window.__sched().raf };
+    c.destroy();
+    window.lib.setAsciiQuality('auto');
+    return out;
+  });
+  check('lite, plain loading state: the glyph field is drawn once, no rAF', plain.ink && plain.raf === 0, JSON.stringify(plain));
+
+  // shimmer() on a destroyed controller does nothing
+  const dead = await page.evaluate(() => {
+    const c = window.lib.createAsciiReveal(document.getElementById('app'), { lazy: false });
+    c.destroy();
+    c.shimmer(true);
+    return { raf: window.__sched().raf, canvases: document.querySelectorAll('canvas').length };
+  });
+  check('shimmer(true) after destroy() schedules nothing and draws nothing', dead.raf === 0 && dead.canvases === 0, JSON.stringify(dead));
+
+  // one skeleton bigger than the area cap still shimmers (the first is always allowed)
+  await page.evaluate(() => {
+    document.getElementById('list').innerHTML = window.lib.asciiSkeletonHTML({ rows: 30, seed: 5 });
+    document.querySelector('#list .ars').style.width = '800px';
+    window.lib.setAsciiLimits({ maxAnimatedArea: 1000 });
+    window.stopBig = window.lib.animateSkeletons(document.getElementById('list'));
+  });
+  await page.waitForTimeout(500);
+  check('a lone skeleton larger than the area cap still shimmers', (await canvases(page)) === 1, `${await canvases(page)} canvases`);
+  await page.evaluate(() => { window.stopBig(); window.lib.setAsciiLimits({ maxAnimatedArea: 800000 }); });
+
+  // markup without the stylesheet: the shimmer canvas stays out of flow (no growing skeleton)
+  const flow = await page.evaluate(async () => {
+    document.getElementById('list').innerHTML = window.lib.asciiSkeletonHTML({ lines: 2, css: false });
+    const el = document.querySelector('#list .ars');
+    const h0 = el.getBoundingClientRect().height;
+    window.stopNoCss = window.lib.animateSkeletons(document.getElementById('list'));
+    await new Promise((r) => setTimeout(r, 900));
+    const cv = el.querySelector('canvas');
+    const out = { h0, h1: el.getBoundingClientRect().height, pos: cv ? cv.style.position : 'none' };
+    window.stopNoCss();
+    return out;
+  });
+  check('css:false markup: the canvas is absolutely positioned and the height does not grow', flow.pos === 'absolute' && Math.abs(flow.h1 - flow.h0) < 1, JSON.stringify(flow));
+  await ctx.close();
+}
+
 check('no page errors', errors.length === 0, errors.join(' | '));
 await browser.close();
 server.close();

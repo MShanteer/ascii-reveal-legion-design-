@@ -19,7 +19,7 @@ export type ResolvedQuality = 'full' | 'lite' | 'off';
 export interface AsciiLimits {
   /** At most this many skeletons shimmer at once; the rest keep their still glyph pattern. Default 6. */
   maxAnimatedSkeletons: number;
-  /** Total area (CSS px²) of the skeletons that shimmer at once. Default 800 000 (about 1000 × 800). */
+  /** Total area (CSS px²) of the skeletons that shimmer at once. Default 800 000 (about 1000 × 800). The first skeleton is always allowed, however large. */
   maxAnimatedArea: number;
 }
 
@@ -76,7 +76,8 @@ export function getAsciiLimits(): AsciiLimits {
 
 /** True on devices that should not run decorative animation: 4 or fewer logical cores, or 4 GB or less of memory. */
 export function isLowEndDevice(): boolean {
-  if (typeof navigator === 'undefined') return false;
+  // never on the server: Node has a navigator too, and the answer must not differ between server and browser renders
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
   const n = navigator as Navigator & { deviceMemory?: number };
   const cores = n.hardwareConcurrency;
   const mem = n.deviceMemory;

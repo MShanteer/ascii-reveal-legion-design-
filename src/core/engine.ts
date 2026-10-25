@@ -1,7 +1,7 @@
 import { resolvePreset, type Preset, type PresetName } from './presets';
 import { clamp, dpr as getDpr, ease, easeIO, freeCanvas, hash, isBrowser, parseColor } from './util';
 import { imageMascot, mascots, type MascotDraw, type MascotName } from './mascots';
-import { resolveQuality, type AsciiQuality } from './quality';
+import { resolveQuality, subscribeQuality, type AsciiQuality } from './quality';
 
 /* ------------------------------------------------------------------ */
 /* Public types                                                        */
@@ -32,7 +32,7 @@ export interface AsciiRevealOptions {
   overlay?: HTMLElement;
   /**
    * Show an animated ASCII mascot while loading instead of the plain shimmer:
-   * `spider`, `ghost`, `pumpkin`, `bat`, an SVG URL, SVG markup, or your own draw function.
+   * `spider`, `ghost`, `pumpkin`, `bat`, `antler`, `thinking`, `legion-mark`, an SVG URL, SVG markup, or your own draw function.
    */
   mascot?: MascotName | string | MascotDraw | null;
   /**
@@ -918,6 +918,7 @@ class Controller implements AsciiRevealController {
   lastRects: { x: number; y: number; w: number; h: number }[] = [];
   shimmerLoop: (Loop & { stopAt: number; canvas: HTMLCanvasElement; still?: boolean; free?: () => void }) | null = null;
   private shimmerIO: IntersectionObserver | null = null;
+  private qualityUnsub: (() => void) | null = null;
   seed = (Math.random() * 1e6) | 0;
   n = 0;
   destroyed = false;
@@ -1281,7 +1282,22 @@ class Controller implements AsciiRevealController {
       this.shimmerLoop = null;
       this.shimmerIO?.disconnect();
       this.shimmerIO = null;
+      this.qualityUnsub?.();
+      this.qualityUnsub = null;
     }
+  }
+
+  /** If the quality drops (reduced motion switched on, setAsciiQuality('off')) while a loop plays, settle it to a still frame. */
+  private watchQuality() {
+    this.qualityUnsub?.();
+    this.qualityUnsub = subscribeQuality(() => {
+      const loop = this.shimmerLoop;
+      if (!loop || loop.still || resolveQuality(this.opts.quality) === 'full') return;
+      const wasOn = loop.stopAt === Infinity;
+      this.dropLoop(loop);
+      sleepIfIdle();
+      if (wasOn && !this.destroyed) this.shimmer(true);
+    });
   }
 
   /** Pause a loop while the element is off screen, and wake the frame loop when it comes back. */
@@ -1299,7 +1315,7 @@ class Controller implements AsciiRevealController {
   }
 
   shimmer(on: boolean) {
-    if (!isBrowser()) return;
+    if (!isBrowser() || (on && this.destroyed)) return;
     if (!on) {
       const loop = this.shimmerLoop;
       if (loop && loop.stopAt === Infinity) {
@@ -1317,8 +1333,6 @@ class Controller implements AsciiRevealController {
     }
     const quality = resolveQuality(this.opts.quality);
     const draw = this.mascotDraw();
-    // lite / off (low-end device, reduced motion): no frame loop. A mascot is drawn once as a still; the plain shimmer is skipped.
-    if (quality !== 'full' && !draw) return;
     // a skeleton already shows the loading state; the plain shimmer would only add noise on top of it
     if (!draw && this.root.querySelector('[data-ascii-skeleton]')) return;
     const dp = getDpr();
@@ -1336,11 +1350,15 @@ class Controller implements AsciiRevealController {
       if (still) {
         // one frame, drawn now. Nothing is scheduled, so it costs nothing while it waits for the data.
         loop.render(performance.now());
-        loop.free();
+        // a mascot that loads an image has nothing to draw yet: paint the frame again once it is ready (no timer involved)
+        draw.ready?.then(() => {
+          if (this.shimmerLoop === loop && !this.destroyed) loop.render(performance.now() + 100);
+        });
         return;
       }
       loops.add(loop);
       this.watchLoop(loop);
+      this.watchQuality();
       kick();
       return;
     }
@@ -1392,8 +1410,15 @@ class Controller implements AsciiRevealController {
       },
     };
     this.shimmerLoop = loop;
+    if (quality !== 'full') {
+      // lite / off (low-end device, reduced motion): the glyph field is drawn once and holds still, so the area is not left blank
+      loop.still = true;
+      loop.render(t0 + 400);
+      return;
+    }
     loops.add(loop);
     this.watchLoop(loop);
+    this.watchQuality();
     kick();
   }
 
